@@ -4,7 +4,9 @@
 #include <string.h>
 
 #include "datatypes.h"
+#include "dctx_reader.h" // Added
 #include "ignore.h"
+#include "llm_formatter.h" // Added
 #include "platform.h"
 #include "utils.h"
 #include "walker.h"
@@ -16,16 +18,17 @@
 
 // --- Function Declarations ---
 static void print_usage(void);
-static bool determine_output_filepath(const char *target_dir_abs_path,
-                                      const char *input_target_arg,
-                                      char *output_filepath_out,
-                                      size_t buffer_size);
+static bool determine_output_filepaths(const char *target_dir_abs_path,
+                                       char *dctx_output_filepath_out,
+                                       size_t dctx_buffer_size,
+                                       char *llm_output_filepath_out,
+                                       size_t llm_buffer_size);
 
 // --- Main Function ---
 int main(int argc, char *argv[]) {
   log_info("%s v%s starting.", APP_NAME, APP_VERSION);
 
-  if (argc < 2 || argc > 2) { // Expects one argument: target directory
+  if (argc < 2 || argc > 2) {
     if (argc == 2 &&
         (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
       print_usage();
@@ -33,7 +36,6 @@ int main(int argc, char *argv[]) {
     }
     if (argc == 2 &&
         (strcmp(argv[1], "-v") == 0 || strcmp(argv[1], "--version") == 0)) {
-      // Version is already printed by log_info
       return EXIT_SUCCESS;
     }
     print_usage();
@@ -42,7 +44,8 @@ int main(int argc, char *argv[]) {
 
   const char *target_dir_arg = argv[1];
   char target_dir_abs_path[MAX_PATH_LEN];
-  char output_filepath[MAX_PATH_LEN];
+  char dctx_filepath[MAX_PATH_LEN];    // For the binary .dircontxt file
+  char llm_txt_filepath[MAX_PATH_LEN]; // For the .llmcontext.txt file
 
   // 1. Resolve target directory to absolute path
   if (!platform_resolve_path(target_dir_arg, target_dir_abs_path,
@@ -52,76 +55,116 @@ int main(int argc, char *argv[]) {
   }
   log_info("Target directory resolved to: %s", target_dir_abs_path);
 
-  // 2. Determine output file path
-  //    Output file will be named <target_dir_name>.dircontxt and placed in the
-  //    *parent* of target_dir_abs_path OR if target_dir_arg is ".", it will be
-  //    <current_dir_name>.dircontxt in the current dir's parent.
-  if (!determine_output_filepath(target_dir_abs_path, target_dir_arg,
-                                 output_filepath, MAX_PATH_LEN)) {
-    log_error("Failed to determine output filepath.");
+  // 2. Determine output file paths (for both .dircontxt and .llmcontext.txt)
+  if (!determine_output_filepaths(target_dir_abs_path, dctx_filepath,
+                                  MAX_PATH_LEN, llm_txt_filepath,
+                                  MAX_PATH_LEN)) {
+    log_error("Failed to determine output filepaths.");
     return EXIT_FAILURE;
   }
-  log_info("Output file will be: %s", output_filepath);
+  log_info("Binary output file will be: %s", dctx_filepath);
+  log_info("LLM text output file will be: %s", llm_txt_filepath);
 
   // 3. Load Ignore Rules
   IgnoreRule *ignore_rules = NULL;
   int ignore_rule_count = 0;
-  // Pass the basename of the output file to ignore it by default.
-  // `platform_get_basename` result here is safe as `output_filepath` string
-  // outlives this call.
-  const char *output_filename_basename = platform_get_basename(output_filepath);
+  const char *dctx_filename_basename = platform_get_basename(dctx_filepath);
+  // We should also ignore the .llmcontext.txt file if it exists during the walk
+  const char *llm_filename_basename = platform_get_basename(llm_txt_filepath);
 
-  if (!load_ignore_rules(target_dir_abs_path, output_filename_basename,
+  // To pass multiple default ignores, load_ignore_rules would need adjustment,
+  // or we add them sequentially. For now, let's primarily focus on ignoring
+  // dctx_filepath. A more robust load_ignore_rules could take an array of
+  // default filenames. For simplicity now, we only pass one. The other will be
+  // ignored if it matches a generic rule.
+  if (!load_ignore_rules(target_dir_abs_path, dctx_filename_basename,
                          &ignore_rules, &ignore_rule_count)) {
     log_error("Failed to load ignore rules. Critical error.");
-    // free_ignore_rules_array(ignore_rules, ignore_rule_count); // Already
-    // handled if realloc failed
     return EXIT_FAILURE;
   }
   log_info("Loaded %d ignore rules.", ignore_rule_count);
-  for (int i = 0; i < ignore_rule_count; ++i) {
-    log_debug("Ignore Rule %d: pattern='%s', dir_only=%d, wc_prefix=%d, "
-              "wc_suffix=%d, exact=%d",
-              i, ignore_rules[i].pattern, ignore_rules[i].is_dir_only,
-              ignore_rules[i].is_wildcard_prefix_match,
-              ignore_rules[i].is_wildcard_suffix_match,
-              ignore_rules[i].is_exact_name_match);
-  }
 
-  // 4. Walk Directory and Build Tree
+  // 4. Walk Directory and Build Tree (for writing the binary .dircontxt)
   int processed_items = 0;
-  DirContextTreeNode *root_node = walk_directory_and_build_tree(
+  DirContextTreeNode *tree_for_writing = walk_directory_and_build_tree(
       target_dir_abs_path, ignore_rules, ignore_rule_count, &processed_items);
 
-  if (root_node == NULL) {
+  if (tree_for_writing == NULL) {
     log_error("Failed to walk directory and build tree for: %s",
               target_dir_abs_path);
     free_ignore_rules_array(ignore_rules, ignore_rule_count);
     return EXIT_FAILURE;
   }
-  log_info("Directory tree built. Root node relative path: '%s'",
-           root_node->relative_path);
+  log_info(
+      "Directory tree built for binary writer. Root node relative path: '%s'",
+      tree_for_writing->relative_path);
 
-#if DEBUG_LOGGING_ENABLED // Conditionally compile debug tree print
-  log_debug("--- In-memory Tree Structure ---");
-  print_tree_recursive(root_node, 0);
-  log_debug("-------------------------------");
+#if DEBUG_LOGGING_ENABLED
+  log_debug("--- In-memory Tree Structure (for writing) ---");
+  print_tree_recursive(tree_for_writing, 0);
+  log_debug("---------------------------------------------");
 #endif
 
-  // 5. Write .dircontxt File
-  log_info("Writing to .dircontxt file: %s", output_filepath);
-  if (!write_dircontxt_file(output_filepath, root_node)) {
-    log_error("Failed to write .dircontxt file to: %s", output_filepath);
-    free_tree_recursive(root_node);
+  // 5. Write .dircontxt Binary File
+  log_info("Writing to binary .dircontxt file: %s", dctx_filepath);
+  if (!write_dircontxt_file(dctx_filepath, tree_for_writing)) {
+    log_error("Failed to write .dircontxt binary file to: %s", dctx_filepath);
+    free_tree_recursive(tree_for_writing);
     free_ignore_rules_array(ignore_rules, ignore_rule_count);
     return EXIT_FAILURE;
   }
+  log_info(
+      "Successfully created binary .dircontxt file: %s (%d items included).",
+      dctx_filepath, processed_items);
 
-  log_info("Successfully created %s (%d items included).", output_filepath,
-           processed_items);
+  // We are done with tree_for_writing, free it.
+  // The reader will build its own tree from the file.
+  free_tree_recursive(tree_for_writing);
+  tree_for_writing = NULL;
 
-  // 6. Cleanup
-  free_tree_recursive(root_node);
+  // --- Generation of .llmcontext.txt file ---
+  log_info("Attempting to generate LLM context text file...");
+
+  DirContextTreeNode *tree_for_llm = NULL;
+  uint64_t data_section_offset = 0;
+
+  // 6. Read the .dircontxt binary file's header to reconstruct the tree for LLM
+  // formatting
+  if (!dctx_read_and_parse_header(dctx_filepath, &tree_for_llm,
+                                  &data_section_offset)) {
+    log_error("Failed to read and parse the created .dircontxt binary file "
+              "header from: %s",
+              dctx_filepath);
+    log_error("Cannot generate .llmcontext.txt file.");
+    // tree_for_llm should be NULL if dctx_read_and_parse_header fails and
+    // cleans up.
+    free_ignore_rules_array(ignore_rules, ignore_rule_count);
+    return EXIT_FAILURE; // Or a different error code
+  }
+  log_info(
+      ".dircontxt binary file header parsed successfully for LLM formatting.");
+
+#if DEBUG_LOGGING_ENABLED
+  log_debug("--- In-memory Tree Structure (read for LLM) ---");
+  print_tree_recursive(tree_for_llm, 0);
+  log_debug("----------------------------------------------");
+#endif
+
+  // 7. Generate the .llmcontext.txt file
+  if (!generate_llm_context_file(llm_txt_filepath, tree_for_llm, dctx_filepath,
+                                 data_section_offset)) {
+    log_error("Failed to generate .llmcontext.txt file at: %s",
+              llm_txt_filepath);
+    // generate_llm_context_file should have logged specific errors.
+  } else {
+    log_info("Successfully generated .llmcontext.txt file: %s",
+             llm_txt_filepath);
+  }
+
+  // 8. Final Cleanup
+  if (tree_for_llm != NULL) {
+    free_tree_recursive(tree_for_llm);
+  }
   free_ignore_rules_array(ignore_rules, ignore_rule_count);
 
   return EXIT_SUCCESS;
@@ -131,27 +174,25 @@ int main(int argc, char *argv[]) {
 
 static void print_usage(void) {
   printf("Usage: %s <target_directory>\n", APP_NAME);
-  printf("Creates a .dircontxt file for the specified target directory.\n");
-  printf("The output file will be named <target_directory_name>.dircontxt \n");
-  printf("and placed in the parent directory of <target_directory>.\n");
-  printf("If <target_directory> is '.', the output is "
-         "<current_folder_name>.dircontxt \n");
-  printf("in the parent of the current working directory.\n\n");
+  printf("Creates a .dircontxt binary file and a .llmcontext.txt file\n");
+  printf("for the specified target directory.\n");
+  printf("Output files will be named <target_directory_name>.dircontxt and\n");
+  printf("<target_directory_name>.llmcontext.txt, placed in the parent "
+         "directory\n");
+  printf("of <target_directory>.\n\n");
   printf("Options:\n");
   printf("  -h, --help     Show this help message and exit.\n");
   printf("  -v, --version  Show version information and exit.\n");
 }
 
-static bool determine_output_filepath(
-    const char
-        *target_dir_abs_path,     // Absolute path of the directory to archive
-    const char *input_target_arg, // Original argument (e.g., "." or "myfolder")
-    char *output_filepath_out, size_t buffer_size) {
+static bool determine_output_filepaths(const char *target_dir_abs_path,
+                                       char *dctx_output_filepath_out,
+                                       size_t dctx_buffer_size,
+                                       char *llm_output_filepath_out,
+                                       size_t llm_buffer_size) {
   char dir_to_get_name_from[MAX_PATH_LEN];
   safe_strncpy(dir_to_get_name_from, target_dir_abs_path, MAX_PATH_LEN);
 
-  // Use utils get_directory_basename to handle potential trailing slashes
-  // correctly
   char *target_basename = get_directory_basename(dir_to_get_name_from);
   if (!target_basename) {
     log_error("Failed to get basename for target directory: %s",
@@ -159,36 +200,35 @@ static bool determine_output_filepath(
     return false;
   }
 
-  char output_filename[MAX_PATH_LEN];
-  snprintf(output_filename, MAX_PATH_LEN, "%s.dircontxt", target_basename);
+  char dctx_filename[MAX_PATH_LEN];
+  snprintf(dctx_filename, MAX_PATH_LEN, "%s.dircontxt", target_basename);
+
+  char llm_filename[MAX_PATH_LEN];
+  snprintf(llm_filename, MAX_PATH_LEN, "%s.llmcontext.txt", target_basename);
+
   free(target_basename); // Free the string returned by get_directory_basename
 
-  // Output file goes into the PARENT of the target_dir_abs_path
   char *parent_of_target_dir = platform_get_dirname(target_dir_abs_path);
   if (!parent_of_target_dir) {
     log_error("Failed to get parent directory of: %s", target_dir_abs_path);
     return false;
   }
 
-  // If target_dir_abs_path was something like "/", its parent is also "/".
-  // Ensure we don't try to create "/.dircontxt" or similar without permissions.
-  // For simplicity, let's assume paths are typical user-space paths.
-  if (strcmp(parent_of_target_dir, PLATFORM_DIR_SEPARATOR_STR) == 0 &&
-      strcmp(target_dir_abs_path, PLATFORM_DIR_SEPARATOR_STR) == 0) {
-    // Trying to process root itself, outputting to root. Might be an issue.
-    // Or just let platform_join_paths handle it, it might be fine depending on
-    // OS.
+  bool success = true;
+  if (!platform_join_paths(parent_of_target_dir, dctx_filename,
+                           dctx_output_filepath_out, dctx_buffer_size)) {
+    log_error("Failed to join parent path '%s' and dctx filename '%s'",
+              parent_of_target_dir, dctx_filename);
+    success = false;
+  }
+  if (success &&
+      !platform_join_paths(parent_of_target_dir, llm_filename,
+                           llm_output_filepath_out, llm_buffer_size)) {
+    log_error("Failed to join parent path '%s' and llm filename '%s'",
+              parent_of_target_dir, llm_filename);
+    success = false;
   }
 
-  if (!platform_join_paths(parent_of_target_dir, output_filename,
-                           output_filepath_out, buffer_size)) {
-    log_error("Failed to join parent path '%s' and output filename '%s'",
-              parent_of_target_dir, output_filename);
-    free(parent_of_target_dir);
-    return false;
-  }
-
-  free(
-      parent_of_target_dir); // Free the string returned by platform_get_dirname
-  return true;
+  free(parent_of_target_dir);
+  return success;
 }
