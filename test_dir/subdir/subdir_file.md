@@ -1,1 +1,1 @@
-Data in subdir_file.md
+Data in subdir_file.md.

@@ -3,7 +3,7 @@
 #include "utils.h" // For log_debug, log_info, log_error, read_line_from_file, trim_trailing_newline, safe_strncpy
 
 #include <ctype.h> // For isspace
-#include <errno.h> // For errno in case fopen fails, etc.
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,24 +34,23 @@ bool parse_ignore_pattern_line(const char *orig_line, IgnoreRule *rule_out) {
 
   char line_buffer[MAX_PATH_LEN];
   safe_strncpy(line_buffer, orig_line, MAX_PATH_LEN);
-  trim_trailing_newline(line_buffer); // Remove \n or \r\n
+  trim_trailing_newline(line_buffer);
 
-  // Trim leading whitespace
   const char *line = line_buffer;
   while (isspace((unsigned char)*line))
     line++;
 
-  // Trim trailing whitespace (after newline removal)
   char *end = (char *)line + strlen(line) - 1;
   while (end >= line && isspace((unsigned char)*end))
     end--;
   *(end + 1) = '\0';
 
-  if (line[0] == '\0' || line[0] == '#') { // Skip empty lines or comments
-    return false;                          // Not a rule to add
+  // MODIFIED HERE: Check for // comments
+  if (line[0] == '\0' || line[0] == '#' || (line[0] == '/' && line[1] == '/')) {
+    return false;
   }
 
-  memset(rule_out, 0, sizeof(IgnoreRule)); // Initialize rule
+  memset(rule_out, 0, sizeof(IgnoreRule));
   safe_strncpy(rule_out->pattern, line, MAX_PATH_LEN);
 
   size_t len = strlen(rule_out->pattern);
@@ -59,35 +58,22 @@ bool parse_ignore_pattern_line(const char *orig_line, IgnoreRule *rule_out) {
   rule_out->is_dir_only = false;
   rule_out->is_wildcard_prefix_match = false;
   rule_out->is_wildcard_suffix_match = false;
-  rule_out->is_exact_name_match =
-      false; // Will be set to true if no other type matches
+  rule_out->is_exact_name_match = false;
 
-  // Rule 1: If a pattern ends with a slash, it is removed for the purpose of
-  // matching, but it would only find a match with a directory.
   if (len > 0 && rule_out->pattern[len - 1] == PLATFORM_DIR_SEPARATOR) {
     rule_out->is_dir_only = true;
-    rule_out->pattern[len - 1] = '\0'; // Remove trailing slash for matching
-    len--;                             // Update length
+    rule_out->pattern[len - 1] = '\0';
+    len--;
   }
 
-  // Simplified wildcard handling:
   if (len > 1 && rule_out->pattern[len - 1] == '*' &&
       rule_out->pattern[len - 2] == PLATFORM_DIR_SEPARATOR) {
-    // Pattern like "dir/*" -> means "dir/" and everything under it
     rule_out->is_wildcard_prefix_match = true;
-    // Pattern becomes "dir/", the '*' is implicit for "everything under"
-    rule_out->pattern[len - 1] = '\0'; // Remove the '*' but keep the slash
-    // is_dir_only might also be true if original was "dir/*/"
+    rule_out->pattern[len - 1] = '\0';
   } else if (len > 1 && rule_out->pattern[0] == '*' &&
              rule_out->pattern[1] == '.') {
-    // Pattern like "*.log"
     rule_out->is_wildcard_suffix_match = true;
-    // The pattern remains as "*.log", the flag indicates suffix matching on the
-    // part after '*'
   } else {
-    // If not a recognized wildcard type, it's an exact name match.
-    // This also catches patterns like "foo" that might be directories (if
-    // is_dir_only is true) or files.
     rule_out->is_exact_name_match = true;
   }
 
@@ -108,7 +94,6 @@ bool load_ignore_rules(const char *base_dir_path,
 
   IgnoreRule default_rule;
 
-  // Ignore the .dircontxtignore file itself
   memset(&default_rule, 0, sizeof(IgnoreRule));
   safe_strncpy(default_rule.pattern, DEFAULT_IGNORE_FILENAME, MAX_PATH_LEN);
   default_rule.is_exact_name_match = true;
@@ -117,7 +102,6 @@ bool load_ignore_rules(const char *base_dir_path,
     return false;
   log_debug("Added default ignore: %s", DEFAULT_IGNORE_FILENAME);
 
-  // Ignore the output .dircontxt file
   if (output_filename_to_ignore && output_filename_to_ignore[0] != '\0') {
     memset(&default_rule, 0, sizeof(IgnoreRule));
     safe_strncpy(default_rule.pattern, output_filename_to_ignore, MAX_PATH_LEN);
@@ -153,8 +137,7 @@ bool load_ignore_rules(const char *base_dir_path,
       }
       fclose(fp);
     } else {
-      if (errno != 0 &&
-          errno != ENOENT) { // ENOENT (No such file or directory) is fine
+      if (errno != 0 && errno != ENOENT) {
         log_info("Could not read %s in %s: %s. Using default ignores only.",
                  DEFAULT_IGNORE_FILENAME, base_dir_path, strerror(errno));
       } else {
@@ -173,21 +156,16 @@ bool should_ignore_item(const char *item_relative_path, const char *item_name,
     return false;
   }
 
-  // Gitignore logic: a pattern without a slash will match a name anywhere.
-  // A pattern with a slash is matched from the root.
-  // A pattern ending with a slash specifically matches a directory.
-
   for (int i = 0; i < rule_count; ++i) {
     const IgnoreRule *rule = &rules[i];
     bool matched = false;
 
-    // If rule is dir_only, item must be a directory
     if (rule->is_dir_only && !is_item_dir) {
       continue;
     }
 
-    if (rule->is_wildcard_suffix_match) {             // e.g., "*.log"
-      const char *suffix_pattern = rule->pattern + 1; // Skip the '*'
+    if (rule->is_wildcard_suffix_match) {
+      const char *suffix_pattern = rule->pattern + 1;
       size_t item_name_len = strlen(item_name);
       size_t suffix_pattern_len = strlen(suffix_pattern);
       if (item_name_len >= suffix_pattern_len &&
@@ -195,37 +173,23 @@ bool should_ignore_item(const char *item_relative_path, const char *item_name,
                  suffix_pattern) == 0) {
         matched = true;
       }
-    } else if (rule->is_wildcard_prefix_match) { // e.g., "build/*" (stored as
-                                                 // "build/")
-      // Rule pattern is "build/"
-      // Item relative path should start with "build/"
+    } else if (rule->is_wildcard_prefix_match) {
       if (strncmp(item_relative_path, rule->pattern, strlen(rule->pattern)) ==
           0) {
         matched = true;
       }
     } else if (rule->is_exact_name_match) {
-      // If pattern contains no slash, it matches against item_name.
-      // If pattern contains a slash, it's matched relative to the root
-      // (item_relative_path).
       if (strchr(rule->pattern, PLATFORM_DIR_SEPARATOR) == NULL) {
-        // No slash in pattern: match item_name
         if (strcmp(item_name, rule->pattern) == 0) {
           matched = true;
         }
       } else {
-        // Slash in pattern: match item_relative_path
-        // For directories, item_relative_path doesn't have trailing slash
-        // unless it's the root. Rule pattern (if from "foo/") has trailing
-        // slash removed. So, compare "foo" with "foo" or "foo/bar" with
-        // "foo/bar"
         if (strcmp(item_relative_path, rule->pattern) == 0) {
           matched = true;
         }
       }
     }
 
-    // If the rule was dir_only (e.g. from "foo/"), and an exact match was
-    // intended for the directory name itself.
     if (!matched && rule->is_dir_only && rule->is_exact_name_match) {
       if (strcmp(item_name, rule->pattern) == 0) {
         matched = true;

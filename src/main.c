@@ -69,14 +69,10 @@ int main(int argc, char *argv[]) {
   IgnoreRule *ignore_rules = NULL;
   int ignore_rule_count = 0;
   const char *dctx_filename_basename = platform_get_basename(dctx_filepath);
-  // We should also ignore the .llmcontext.txt file if it exists during the walk
-  const char *llm_filename_basename = platform_get_basename(llm_txt_filepath);
+  // const char* llm_filename_basename =
+  // platform_get_basename(llm_txt_filepath); // REMOVED/COMMENTED: Unused for
+  // now
 
-  // To pass multiple default ignores, load_ignore_rules would need adjustment,
-  // or we add them sequentially. For now, let's primarily focus on ignoring
-  // dctx_filepath. A more robust load_ignore_rules could take an array of
-  // default filenames. For simplicity now, we only pass one. The other will be
-  // ignored if it matches a generic rule.
   if (!load_ignore_rules(target_dir_abs_path, dctx_filename_basename,
                          &ignore_rules, &ignore_rule_count)) {
     log_error("Failed to load ignore rules. Critical error.");
@@ -117,12 +113,9 @@ int main(int argc, char *argv[]) {
       "Successfully created binary .dircontxt file: %s (%d items included).",
       dctx_filepath, processed_items);
 
-  // We are done with tree_for_writing, free it.
-  // The reader will build its own tree from the file.
   free_tree_recursive(tree_for_writing);
   tree_for_writing = NULL;
 
-  // --- Generation of .llmcontext.txt file ---
   log_info("Attempting to generate LLM context text file...");
 
   DirContextTreeNode *tree_for_llm = NULL;
@@ -136,10 +129,8 @@ int main(int argc, char *argv[]) {
               "header from: %s",
               dctx_filepath);
     log_error("Cannot generate .llmcontext.txt file.");
-    // tree_for_llm should be NULL if dctx_read_and_parse_header fails and
-    // cleans up.
     free_ignore_rules_array(ignore_rules, ignore_rule_count);
-    return EXIT_FAILURE; // Or a different error code
+    return EXIT_FAILURE;
   }
   log_info(
       ".dircontxt binary file header parsed successfully for LLM formatting.");
@@ -155,7 +146,6 @@ int main(int argc, char *argv[]) {
                                  data_section_offset)) {
     log_error("Failed to generate .llmcontext.txt file at: %s",
               llm_txt_filepath);
-    // generate_llm_context_file should have logged specific errors.
   } else {
     log_info("Successfully generated .llmcontext.txt file: %s",
              llm_txt_filepath);
@@ -169,8 +159,6 @@ int main(int argc, char *argv[]) {
 
   return EXIT_SUCCESS;
 }
-
-// --- Helper Function Implementations ---
 
 static void print_usage(void) {
   printf("Usage: %s <target_directory>\n", APP_NAME);
@@ -206,7 +194,7 @@ static bool determine_output_filepaths(const char *target_dir_abs_path,
   char llm_filename[MAX_PATH_LEN];
   snprintf(llm_filename, MAX_PATH_LEN, "%s.llmcontext.txt", target_basename);
 
-  free(target_basename); // Free the string returned by get_directory_basename
+  free(target_basename);
 
   char *parent_of_target_dir = platform_get_dirname(target_dir_abs_path);
   if (!parent_of_target_dir) {

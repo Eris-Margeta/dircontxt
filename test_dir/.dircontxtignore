@@ -1,3 +1,6 @@
+// This is .dircontxtignore
 .DS_Store
 ignored_file.tmp
 ignored_folder/
+*.log
+specific_dir/specific_file_to_ignore.txt
