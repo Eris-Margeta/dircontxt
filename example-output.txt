@@ -1,0 +1,3279 @@
+[DIRCONTXT_LLM_SNAPSHOT_V1.2]
+
+<INSTRUCTIONS>
+1. Manifest: The "DIRECTORY_TREE" section below lists all files and directories.
+   - Each entry: [TYPE] RELATIVE_PATH (ID:UNIQUE_ID, MOD:UNIX_TIMESTAMP, SIZE:BYTES)
+   - TYPE is [D] for directory, [F] for file.
+   - SIZE is for files only.
+   - Binary files may be noted with (CONTENT:BINARY_HINT or CONTENT:BINARY_PLACEHOLDER).
+2. Content Access: To read a specific file:
+   - Find its UNIQUE_ID from the DIRECTORY_TREE.
+   - Search for the marker: <FILE_CONTENT_START ID="UNIQUE_ID">
+   - The content is between this marker and <FILE_CONTENT_END ID="UNIQUE_ID">
+</INSTRUCTIONS>
+
+<DIRECTORY_TREE>
+[D]  (ID:ROOT, MOD:1759959022)
+  [F] .dircontxtignore (ID:F001, MOD:1759959022, SIZE:791)
+  [F] Makefile (ID:F002, MOD:1759958360, SIZE:4475)
+  [F] usage.md (ID:F003, MOD:1759958907, SIZE:6210)
+  [F] TODO.md (ID:F004, MOD:1759958163, SIZE:7449)
+  [F] README.md (ID:F005, MOD:1759958102, SIZE:8355)
+  [F] .gitignore (ID:F006, MOD:1749021093, SIZE:558)
+  [D] src (ID:D007, MOD:1759958756)
+    [F] src/utils.h (ID:F008, MOD:1749021358, SIZE:2084)
+    [F] src/dctx_reader.h (ID:F009, MOD:1749025324, SIZE:3671)
+    [F] src/ignore.h (ID:F010, MOD:1759958628, SIZE:2621)
+    [F] src/walker.h (ID:F011, MOD:1749021664, SIZE:1172)
+    [F] src/writer.c (ID:F012, MOD:1749021848, SIZE:10025)
+    [F] src/llm_formatter.c (ID:F013, MOD:1749029181, SIZE:11306)
+    [F] src/platform.c (ID:F014, MOD:1749021261, SIZE:7453)
+    [F] src/datatypes.h (ID:F015, MOD:1759958756, SIZE:2192)
+    [F] src/walker.c (ID:F016, MOD:1749021795, SIZE:8328)
+    [F] src/ignore.c (ID:F017, MOD:1759958569, SIZE:8266)
+    [F] src/dctx_reader.c (ID:F018, MOD:1749025395, SIZE:12686)
+    [F] src/utils.c (ID:F019, MOD:1749029164, SIZE:6857)
+    [F] src/main.c (ID:F020, MOD:1749028883, SIZE:8222)
+    [F] src/llm_formatter.h (ID:F021, MOD:1749029230, SIZE:1288)
+    [F] src/writer.h (ID:F022, MOD:1749028956, SIZE:1210)
+    [F] src/platform.h (ID:F023, MOD:1749021163, SIZE:2566)
+</DIRECTORY_TREE>
+
+<FILE_CONTENT_START ID="F001" PATH=".dircontxtignore">
+# Dircontxt Ignore Rules
+# This file specifies files and directories to be excluded when creating a snapshot
+# of the 'dircontxt' project itself.
+
+# 1. Version Control System
+# Exclude the entire .git directory, which contains repository history and metadata.
+.git/
+
+# 2. Build Artifacts
+# Exclude the entire build directory, which contains compiled object files (.o)
+# and the final executable.
+build/
+
+# 3. Test Environment
+# Exclude the temporary directory created by the 'make test' or 'make run' command.
+test_dir/
+
+# 4. Dircontxt Output Files
+# Exclude any snapshot files that might be present in the directory from previous runs.
+*.dircontxt
+*.llmcontext.txt
+
+# 5. Common OS and IDE Metadata
+# Exclude system-specific or editor-specific configuration files.
+.DS_Store
+.vscode/
+.idea/
+</FILE_CONTENT_END ID="F001">
+
+<FILE_CONTENT_START ID="F002" PATH="Makefile">
+# Compiler and C_STANDARD
+CC = clang
+C_STANDARD = -std=c11
+
+# Tools
+RM = rm -rf
+
+# Directories
+SRC_DIR = src
+BUILD_DIR = build
+OBJ_DIR = $(BUILD_DIR)/obj
+TARGET_DIR = $(BUILD_DIR)/bin
+
+# Target executable name
+TARGET = $(TARGET_DIR)/dircontxt
+
+# Source files (find all .c files in SRC_DIR)
+SRCS = $(wildcard $(SRC_DIR)/*.c)
+
+# Object files (replace .c with .o and put them in OBJ_DIR)
+OBJS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
+
+# Compilation flags
+# -I$(SRC_DIR): Add src directory to include path for local headers
+# -g: Add debug information
+# -Wall, -Wextra, -pedantic: Enable comprehensive warnings for robust code
+CFLAGS_DEBUG = $(C_STANDARD) -g -Wall -Wextra -pedantic -I$(SRC_DIR)
+CFLAGS_RELEASE = $(C_STANDARD) -O2 -Wall -I$(SRC_DIR) -DNDEBUG
+
+# Default to debug flags
+CFLAGS = $(CFLAGS_DEBUG)
+
+# Linker flags
+LDFLAGS =
+
+# Phony targets (targets that don't represent actual files)
+.PHONY: all clean test run debug_run help release
+
+# Default target (called when you just run `make`)
+all: $(TARGET)
+
+# Rule to link the target executable
+$(TARGET): $(OBJS)
+	@mkdir -p $(TARGET_DIR)
+	@echo "LD $@"
+	$(CC) $(OBJS) -o $@ $(LDFLAGS)
+
+# Rule to compile .c files into .o files
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR) # The "| $(OBJ_DIR)" is an order-only prerequisite
+	@echo "CC $<"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Rule to create the object directory
+$(OBJ_DIR):
+	@mkdir -p $(OBJ_DIR)
+
+# Clean up all build artifacts and test outputs
+clean:
+	@echo "Cleaning build artifacts and test files..."
+	$(RM) $(BUILD_DIR)
+	$(RM) test_dir
+	$(RM) test_dir.dircontxt
+	$(RM) test_dir.llmcontext.txt
+
+# Comprehensive test run to validate advanced ignore logic
+test: $(TARGET)
+	@echo "--- Setting up comprehensive test environment ---"
+	# Clean up previous runs
+	$(RM) test_dir test_dir.dircontxt test_dir.llmcontext.txt
+
+	# Create directories to test default, wildcard, and specific ignores
+	mkdir -p test_dir/src
+	mkdir -p test_dir/.git # Should be ignored by default
+	mkdir -p test_dir/node_modules/some-lib # Should be ignored by default
+	mkdir -p test_dir/build/logs # Should be ignored by a directory rule
+
+	# Create test files
+	echo "Main source file" > test_dir/src/main.c
+	echo "README" > test_dir/README.md
+	echo "Git config data" > test_dir/.git/config
+	echo "A library file" > test_dir/node_modules/some-lib/index.js
+	echo "A generic log" > test_dir/app.log # Should be ignored by wildcard *.log
+	echo "A build log" > test_dir/build/logs/output.log # Should be ignored by build/ rule
+	echo "An important log" > test_dir/build/important.log # Should be re-included by negation
+
+	# Create the project-specific .dircontxtignore file
+	@echo "--- Creating .dircontxtignore with advanced rules ---"
+	echo "# Ignore build artifacts and all log files" > test_dir/.dircontxtignore
+	echo "build/" >> test_dir/.dircontxtignore
+	echo "*.log" >> test_dir/.dircontxtignore
+	echo "" >> test_dir/.dircontxtignore
+	echo "# Negation Rule: Re-include the important log file" >> test_dir/.dircontxtignore
+	echo "!build/important.log" >> test_dir/.dircontxtignore
+
+	@echo "--- Running $(TARGET) on ./test_dir ---"
+	$(TARGET) test_dir
+	@echo "--- Test run complete ---"
+	@echo
+	@echo "=> VERIFICATION:"
+	@echo "   Check 'test_dir.llmcontext.txt' to confirm the following:"
+	@echo "   - INCLUDED: src/main.c, README.md, build/important.log"
+	@echo "   - IGNORED: .git/, node_modules/, build/logs/, app.log"
+	@echo
+
+# 'run' is now a convenient alias for 'test'
+run: test
+
+# Run with debug logging enabled (ensures CFLAGS are set for debug)
+debug_run:
+	@echo "Building and running in debug mode..."
+	$(MAKE) CFLAGS="$(CFLAGS_DEBUG)" run
+
+# Build for release (optimized, no debug symbols, NDEBUG defined)
+release: clean
+	@echo "Building for release..."
+	$(MAKE) CFLAGS="$(CFLAGS_RELEASE)" all
+	@echo "Stripping debug symbols from the executable..."
+	strip $(TARGET)
+	@echo "Release build complete. Executable at $(TARGET)"
+
+# Help target to display available commands
+help:
+	@echo "Available targets:"
+	@echo "  all         : Build the $(TARGET) executable (default, debug build)."
+	@echo "  clean       : Remove all build artifacts and test outputs."
+	@echo "  test        : Set up a comprehensive test case and run the program."
+	@echo "  run         : Alias for 'test'."
+	@echo "  debug_run   : Force a debug build and run the test case."
+	@echo "  release     : Build an optimized release executable with debug symbols stripped."
+	@echo "  help        : Show this help message."
+</FILE_CONTENT_END ID="F002">
+
+<FILE_CONTENT_START ID="F003" PATH="usage.md">
+Of course. Now that the code is fixed and the advanced ignore system is in place, it's time to put it all together.
+
+Here is a complete guide covering how to rebuild the project and a detailed documentation on the correct usage of the `dctx` command, with a focus on configuring the new, powerful ignore system. This can replace the relevant sections in your `README.md`.
+
+---
+
+### Rebuilding the Project
+
+After making changes to the source code, you should perform a clean rebuild to ensure all updates are compiled correctly. For general use, creating a release build is recommended as it is optimized for performance and size.
+
+From your project's root directory, run the following commands in your terminal:
+
+1.  **Clean all previous build artifacts:**
+    ```bash
+    make clean
+    ```
+2.  **Build the optimized release version:**
+    ```bash
+    make release
+    ```
+This will create the final, stripped executable at `build/bin/dircontxt`. Your `dctx` command will automatically use this new version the next time you run it.
+
+---
+
+### `dctx` Usage and Configuration Guide
+
+#### Basic Usage
+
+The `dctx` command processes a directory and generates a `.dircontxt` binary file and a `.llmcontext.txt` text file.
+
+**Syntax:**
+```bash
+dctx [directory_path]
+```
+*   `[directory_path]`: The path to the directory you want to capture. If omitted, it defaults to the **current directory (`.`)**.
+
+**Output Location:**
+The output files are always created in the **parent directory** of the target you specify. This is a deliberate design choice to prevent the output files from being included in subsequent runs.
+
+**Examples:**
+
+1.  **Capture the current project:**
+    ```bash
+    # Navigate into your project folder
+    cd ~/DEV/my-project
+
+    # Run the command
+    dctx .
+    ```
+    *Output will be created at `~/DEV/my-project.dircontxt` and `~/DEV/my-project.llmcontext.txt`.*
+
+2.  **Capture a different project by path:**
+    ```bash
+    # Run the command from anywhere, targeting a specific folder
+    dctx ~/Documents/another-project
+    ```
+    *Output will be created at `~/Documents/another-project.dircontxt` and `~/Documents/another-project.llmcontext.txt`.*
+
+---
+
+### Configuring Ignore Rules
+
+Your `dctx` command uses a powerful three-tiered system to determine which files and directories to exclude from the snapshot.
+
+#### The Hierarchy of Rules
+
+Rules are loaded from three sources, in order from lowest to highest priority:
+
+1.  **Default (Built-in) Rules - Lowest Priority**:
+    The application has a hardcoded list of common patterns to ignore, such as `.git/`, `node_modules/`, and `.DS_Store`. These are always active.
+
+2.  **Global Ignore File - Medium Priority**:
+    You can create a global ignore file at `~/.config/dircontxt/ignore`. Rules in this file apply to *every* directory you run `dctx` on and will override the default rules.
+
+3.  **Project Ignore File (`.dircontxtignore`) - Highest Priority**:
+    A file named `.dircontxtignore` in the root of the directory you are capturing provides project-specific rules. These are the most important rules and override any conflicting global or default rules.
+
+#### Rule Precedence: The Last Match Wins
+
+The most important concept is that **the last rule in the combined list that matches a file determines its fate.** This is what allows negation (`!`) to work. If a file is ignored by a general rule but re-included by a later, more specific negation rule, it will be included in the final snapshot.
+
+#### Pattern Syntax Guide
+
+Here is how to write patterns in your `.dircontxtignore` or global ignore file:
+
+| Pattern Example         | Description                                                                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `# comments`            | Lines starting with `#` are ignored.                                                                                                     |
+| `build/`                | A name ending in a `/` matches **only directories**. This ignores any directory named `build` anywhere in the project.                     |
+| `*.log`                 | A leading `*` acts as a wildcard. This ignores any file or directory ending with `.log`.                                                 |
+| `my-file.tmp`           | A simple name matches any file or directory with that name anywhere in the tree.                                                         |
+| `src/config.json`       | Patterns containing a `/` are matched against the full relative path from the project root. This only ignores `config.json` inside `src/`. |
+| `!important.log`        | A leading `!` **negates** the pattern. This re-includes a file that was previously ignored by a more general rule.                         |
+| `build/*`               | A wildcard at the end of a path ignores all files and folders *inside* the `build` directory, but not the directory itself.                |
+
+#### Complete Example
+
+Imagine this file structure:
+
+```
+my-app/
+├── .git/
+│   └── config
+├── node_modules/
+│   └── some-lib/
+├── logs/
+│   ├── debug.log
+│   └── audit.log
+├── src/
+│   └── main.c
+└── secret.key```
+
+And this `.dircontxtignore` file inside `my-app/`:
+
+```
+# Ignore all log files
+*.log
+
+# But re-include the important audit log
+!audit.log
+
+# Ignore sensitive keys
+secret.key
+```
+
+When you run `dctx my-app`, here is how the rules would be applied:
+
+*   `.git/config`: **Ignored**. Matched by the hardcoded default rule for `.git/`.
+*   `node_modules/`: **Ignored**. Matched by the hardcoded default rule.
+*   `logs/debug.log`: **Ignored**. Matched by the `*.log` rule in the project file.
+*   `logs/audit.log`: **Included**. It is first matched by `*.log` (marking it for ignore), but the *last* rule that matches it is `!audit.log`, which negates the ignore and re-includes it.
+*   `src/main.c`: **Included**. No ignore rule matches it.
+*   `secret.key`: **Ignored**. Matched by the `secret.key` rule in the project file.
+</FILE_CONTENT_END ID="F003">
+
+<FILE_CONTENT_START ID="F004" PATH="TODO.md">
+Excellent. This is a perfect next step for making the tool more powerful and user-friendly. Here is the TODO list for the task, followed by a detailed prompt you can provide to an LLM like Gemini to implement the changes.
+
+***
+
+## TODO: Implement Advanced Ignore File Handling
+
+This task focuses on upgrading the `dircontxt` ignore system to be more robust, automatic, and feature-rich, closely mirroring the functionality of Git's `.gitignore`.
+
+### Phase 1: Design and Scoping
+
+*   [ ] **Define Enhanced Syntax:** Formalize the new patterns to support beyond the current implementation.
+    *   `**` for matching directories at any depth.
+    *   `!` for negating a pattern (re-including a file that was previously ignored).
+    *   Wildcards (`*`) anywhere in the pattern, not just at the start/end.
+*   [ ] **Establish a Rule Hierarchy:** Define the order in which ignore rules are applied.
+    1.  **Default Rules (Hardcoded):** A built-in list of common ignores (`.git`, `.DS_Store`, etc.) that are always active.
+    2.  **Global Ignore File:** A user-specific file (e.g., `~/.config/dircontxt/ignore`) that applies to every project.
+    3.  **Project-Specific Ignore File:** The `.dircontxtignore` file in the target directory (highest priority).
+*   [ ] **Plan Data Structure Changes:** Determine what modifications are needed for the `IgnoreRule` struct in `datatypes.h` to accommodate the new syntax (e.g., a flag for negation).
+
+### Phase 2: Implementation
+
+*   [ ] **Modify `datatypes.h`:** Update the `IgnoreRule` struct with new fields to represent pattern types (e.g., negation, globstar `**`).
+*   [ ] **Enhance `ignore.c` - `parse_ignore_pattern_line()`:** Rewrite the parser to understand and correctly categorize the new, advanced syntax.
+*   [ ] **Upgrade `ignore.c` - `load_ignore_rules()`:** Modify this function to implement the new hierarchy:
+    1.  First, add the hardcoded default rules to the list.
+    2.  Next, search for and load the global ignore file.
+    3.  Finally, load the project-specific `.dircontxtignore` file.
+*   [ ] **Rewrite `ignore.c` - `should_ignore_item()`:** Overhaul the matching logic to correctly handle the new patterns. The logic must respect the rule hierarchy, especially the `!` negation patterns, which should override any previous matching ignore rule.
+
+### Phase 3: Testing and Documentation
+
+*   [ ] **Expand `Makefile` `run` Target:** Add more complex file and directory structures to the `test_dir` to validate the new ignore rules (e.g., nested folders, files that should be negated).
+*   [ ] **Update Documentation:** Thoroughly document the new, advanced ignore syntax and the concept of the global ignore file in the `README.md`.
+
+***
+
+## Prompt for Gemini LLM
+
+Here is a structured prompt designed to guide an AI to perform the implementation tasks described above.
+
+**Prompt Starts Here**
+---
+
+### High-Level Goal
+
+Your task is to upgrade the file/directory ignore system in the provided `dircontxt` C project. The goal is to enhance its capabilities to more closely match the functionality of `.gitignore`, including support for more advanced patterns and a hierarchical configuration system (default, global, and project-level ignores).
+
+### Context
+
+You are being provided with the complete source code of the `dircontxt` project in the `[DIRCONTXT_LLM_SNAPSHOT_V1.2]` format. The current system uses a `.dircontxtignore` file and is implemented primarily in `src/ignore.c`, `src/ignore.h`, and `src/datatypes.h`. The current implementation is basic and needs to be significantly expanded.
+
+*(You would paste the full project snapshot from the previous turn here)*
+
+### Core Requirements
+
+1.  **Expand Pattern Syntax:** The ignore system must be updated to parse and correctly match the following patterns:
+    *   **Negation:** Patterns starting with `!` should re-include a file that was matched by a previous pattern. For example, if `*.log` is ignored, `!important.log` should ensure that `important.log` is **not** ignored.
+    *   **Deep Directory Matching (`**`):** The `**` pattern should match directories at any level. For example, `foo/**/bar` should match `foo/bar`, `foo/a/bar`, `foo/a/b/bar`, etc.
+    *   **General Wildcards (`*`):** The `*` wildcard should be usable anywhere in a pattern, not just at the beginning of an extension. For example, `config-*.json` should match `config-dev.json` and `config-prod.json`.
+
+2.  **Implement a Default Ignore List:** A hardcoded, non-configurable list of patterns should be applied by default to every run. This list should be the lowest priority and should include common patterns like:
+    *   `.git/`
+    *   `.DS_Store`
+    *   `node_modules/`
+
+3.  **Implement a Global Ignore File:** The application should look for a global ignore file at a standard user location (e.g., `~/.config/dircontxt/ignore`). If this file exists, its rules should be loaded after the default list but before the project-specific file.
+
+### Implementation Guidance
+
+You should focus your modifications on the following files.
+
+#### 1. `src/datatypes.h`
+
+*   Modify the `IgnoreRule` struct to support the new syntax. I suggest adding an `enum` for pattern complexity and a `bool` for negation.
+    ```c
+    // Example suggestion
+    typedef enum {
+        PATTERN_EXACT,
+        PATTERN_SUFFIX,
+        PATTERN_SUBSTRING, // For general wildcards
+        PATTERN_PATH_GLOB  // For patterns with '**'
+    } PatternType;
+
+    typedef struct {
+      char pattern[MAX_PATH_LEN];
+      PatternType type;
+      bool is_dir_only;
+      bool is_negation; // Add this field
+    } IgnoreRule;
+    ```
+
+#### 2. `src/ignore.c`
+
+This file will require the most significant changes.
+
+*   **`parse_ignore_pattern_line()`**:
+    *   Rewrite this function to detect the new syntax.
+    *   Check for a leading `!` to set the `is_negation` flag.
+    *   Detect `**` and `*` to set the appropriate `PatternType`.
+    *   Remember to strip the `!` from the `pattern` field after setting the flag.
+
+*   **`load_ignore_rules()`**:
+    *   Change this function's logic to load rules in the correct order of precedence:
+        1.  Start by adding the hardcoded **default rules** to the rules array.
+        2.  Next, construct the path to the **global ignore file** (e.g., by getting the `HOME` environment variable). If it exists, parse it and append its rules.
+        3.  Finally, look for the **project-specific `.dircontxtignore`** and append its rules.
+
+*   **`should_ignore_item()`**:
+    *   This function must be completely overhauled.
+    *   It should iterate through all loaded rules from lowest to highest priority.
+    *   It should keep track of the latest matching rule. A simple approach is to have a `bool ignored = false;` and an `int last_match_priority = -1;`.
+    *   For each rule, check if it matches the item's path.
+    *   If a rule matches:
+        *   If it's a **negation rule** (`is_negation = true`), the item should be marked as **not ignored**.
+        *   If it's a **standard rule**, the item should be marked as **ignored**.
+    *   The final decision should be based on the **last rule in the list that matches the item**.
+
+### Deliverables
+
+Please provide the following as your response:
+
+1.  A list of all the files you have modified.
+2.  The complete, updated source code for each of the modified files (`datatypes.h` and `ignore.c`).
+3.  A brief summary of the changes you made and how they fulfill the requirements.
+</FILE_CONTENT_END ID="F004">
+
+<FILE_CONTENT_START ID="F005" PATH="README.md">
+***
+
+# dircontxt Documentation
+
+`dircontxt` is a command-line utility designed to capture a complete, self-contained snapshot of a directory's structure and contents. It produces two distinct output files: a compact binary archive and a detailed, AI-friendly text file, making it an ideal tool for project archiving, analysis, and interaction with Large Language Models (LLMs).
+
+The tool is written in C for performance and portability, using a standard `Makefile` for easy compilation.
+
+## Features
+
+*   **Recursive Directory Scanning**: Captures the entire hierarchy of files and subdirectories.
+*   **Customizable Ignore Rules**: Uses a `.dircontxtignore` file, with a syntax similar to `.gitignore`, to exclude unnecessary files and folders (e.g., build artifacts, temporary files).
+*   **Dual-Output Format**:
+    1.  A compact **binary (`.dircontxt`)** format for efficient storage and machine-to-machine transfer.
+    2.  A verbose **text (`.llmcontext.txt`)** format specifically designed to be parsed and understood by AI models.
+*   **Binary File Detection**: Intelligently identifies binary files by extension and content analysis, replacing their content with a placeholder in the text output to maintain readability.
+
+---
+
+## Installation (macOS)
+
+Follow these steps to compile the application and set up the `dctx` command to be accessible from anywhere in your terminal.
+
+### Step 1: Prerequisites
+
+Ensure you have the **Xcode Command Line Tools** installed, which include `git`, `make`, and the `clang` compiler. If you don't have them, run this command in your terminal:
+
+```bash
+xcode-select --install
+```
+
+### Step 2: Clone and Compile the Project
+
+First, clone the project repository and compile the source code. The `release` target is recommended for general use as it creates an optimized executable.
+
+```bash
+# Go to a directory where you keep your development projects
+cd ~/DEV
+
+# Clone the repository (replace with your actual repository URL)
+git clone https://github.com/your-username/dircontxt.git
+cd dircontxt
+
+# Compile the project for release
+make release
+```
+
+This will create the executable at `build/bin/dircontxt`.
+
+### Step 3: Create a Runner Script
+
+To make the command globally available, we'll create a simple wrapper script.
+
+1.  **Get the absolute path** to the compiled executable. While inside the `dircontxt` project directory, run:
+    ```bash
+    echo "$(pwd)/build/bin/dircontxt"
+    ```
+    Copy the output path. It should look something like `/Users/yourname/DEV/dircontxt/build/bin/dircontxt`.
+
+2.  Create a standard directory for your personal scripts if you don't have one:
+    ```bash
+    mkdir -p ~/.local/bin
+    ```
+
+3.  Create the script file named `dctx`:
+    ```bash
+    nano ~/.local/bin/dctx
+    ```
+
+4.  Paste the following code into the nano editor. **Crucially, replace the placeholder path in `APP_PATH` with the one you copied in step 1.**
+
+    ```sh
+    #!/bin/zsh
+
+    # --- CONFIGURATION ---
+    # IMPORTANT: Replace this path with the absolute path to YOUR executable.
+    APP_PATH="/Users/yourname/DEV/dircontxt/build/bin/dircontxt"
+
+    # --- SCRIPT LOGIC ---
+    if [ ! -x "$APP_PATH" ]; then
+      echo "Error: dircontxt executable not found at:" >&2
+      echo "$APP_PATH" >&2
+      echo "Please check the APP_PATH in ~/.local/bin/dctx" >&2
+      exit 1
+    fi
+
+    # Use the first argument as the target directory, or default to the current directory ('.').
+    TARGET_DIR="${1:-.}"
+
+    # Execute the application
+    "$APP_PATH" "$TARGET_DIR"
+    ```
+
+5.  Save the file and exit nano by pressing `Ctrl + X`, then `Y`, then `Enter`.
+
+### Step 4: Make the Script Executable
+
+```bash
+chmod +x ~/.local/bin/dctx
+```
+
+### Step 5: Add the Script Directory to your Zsh PATH
+
+1.  Open your Zsh configuration file:
+    ```bash
+    nano ~/.zshrc
+    ```
+
+2.  Add the following line to the end of the file. This tells your shell to look for commands in your personal scripts folder.
+
+    ```sh
+    # Add local bin directory for custom scripts
+    export PATH="$HOME/.local/bin:$PATH"
+    ```
+
+3.  Save and exit (`Ctrl + X`, `Y`, `Enter`).
+
+### Step 6: Reload Your Shell Configuration
+
+Apply the changes to your current terminal session:
+
+```bash
+source ~/.zshrc
+```
+
+### Step 7: Verify the Installation
+
+You're all set! Verify that the command works by checking its version.
+
+```bash
+dctx -v
+# You should see: [INFO] dircontxt v0.1.0 starting.
+```
+
+---
+
+## Usage Guide
+
+The `dctx` command is designed to be run from your terminal. It takes a single argument: the path to the directory you want to process.
+
+### Basic Syntax
+
+```bash
+dctx <path_to_directory>
+```
+
+### How to Use It
+
+The output files are always created in the **parent directory** of the target you specify. This prevents the output files from being included in subsequent runs on the same folder.
+
+#### Example 1: Running on the Current Directory
+
+This is the most common use case. Navigate to a project folder and run `dctx` on it.
+
+```bash
+# Navigate to a project you want to capture
+cd ~/DEV/my-web-app
+
+# Run the command on the current directory ('.')
+dctx .
+
+# Output will be created at ~/DEV/my-web-app.dircontxt
+# and ~/DEV/my-web-app.llmcontext.txt
+```
+
+#### Example 2: Running on a Different Directory
+
+You can run the command from anywhere by providing the path to the target directory.
+
+```bash
+# You are currently in your home directory
+pwd
+# /Users/yourname
+
+# Run the command on a project located elsewhere
+dctx ~/Documents/some_project
+
+# Output will be created at ~/Documents/some_project.dircontxt
+# and ~/Documents/some_project.llmcontext.txt
+```
+
+### Configuring Ignores with `.dircontxtignore`
+
+To exclude files and directories from the snapshot, create a file named `.dircontxtignore` in the root of the target directory. The syntax is similar to `.gitignore`.
+
+*   To ignore a directory, add its name followed by a slash: `node_modules/`
+*   To ignore files by extension, use a wildcard: `*.log`
+*   To ignore a specific file by name: `secret.key`
+*   To ignore a file in a specific directory: `config/credentials.json`
+
+**Example `.dircontxtignore` file:**
+
+```
+# Git directory
+.git/
+
+# Build artifacts
+build/
+dist/
+
+# Dependencies
+node_modules/
+
+# Log files
+*.log
+*.tmp
+
+# IDE / OS files
+.vscode/
+.idea/
+.DS_Store
+
+# Specific sensitive file
+credentials.env
+```
+
+---
+
+## Understanding the Output Files
+
+For a target directory named `my-project`, `dctx` will generate two files:
+
+### 1. The Binary Archive: `my-project.dircontxt`
+
+This is a compact, machine-readable archive containing the complete directory snapshot.
+
+*   **Purpose**: It serves as the single source of truth for the directory's state at the time of capture. It is optimized for storage and programmatic access.
+*   **Structure**:
+    1.  **Signature**: A unique 8-byte header (`DIRCTXTV`) to identify the file type.
+    2.  **Header Section**: A serialized representation of the entire directory tree, including metadata for every file and folder (paths, timestamps, etc.).
+    3.  **Data Section**: The concatenated, raw contents of every file in the tree.
+
+This file is used by the `dctx` tool itself to generate the text-based LLM snapshot.
+
+### 2. The LLM Snapshot: `my-project.llmcontext.txt`
+
+This is a verbose, structured text file designed to be easily understood by an AI, like Gemini.
+
+*   **Purpose**: To provide a complete and easily parsable context of a software project to an AI for tasks like code review, documentation, debugging, or analysis.
+*   **Structure**:
+    *   `[DIRCONTXT_LLM_SNAPSHOT_V1.2]`: A version header.
+    *   `<INSTRUCTIONS>`: A short guide explaining how to read the file format.
+    *   `<DIRECTORY_TREE>`: A manifest of all files and directories. Each entry includes:
+        *   `[D]` for directory or `[F]` for file.
+        *   The relative path of the item.
+        *   A unique `ID` (e.g., `F001`, `D002`) used to link to its content.
+        *   The `MOD` (Unix modification timestamp) and `SIZE` (in bytes).
+    *   `<FILE_CONTENT_START ID="...">` and `</FILE_CONTENT_END>`: Blocks that contain the full content of each text file, linked by the ID from the directory tree.
+    *   **Binary Placeholders**: If a file is identified as binary, its content is replaced with a placeholder (e.g., `[BINARY CONTENT PLACEHOLDER - Size: 13072 bytes]`) to keep the snapshot clean and readable.
+</FILE_CONTENT_END ID="F005">
+
+<FILE_CONTENT_START ID="F006" PATH=".gitignore">
+# Compiled Object files
+*.o
+*.ko
+*.obj
+*.elf
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+dircontxt # Our target executable name
+
+# Debug files
+*.dSYM/
+*.stackdump
+*.DS_Store
+
+# Build directories (if you use them later, e.g., with CMake)
+build/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json # Generated by CMake/Bear for LSP
+
+# Editor-specific files
+.vscode/
+.idea/
+
+# Output files
+*.dircontxt
+</FILE_CONTENT_END ID="F006">
+
+<FILE_CONTENT_START ID="F008" PATH="src/utils.h">
+#ifndef UTILS_H
+#define UTILS_H
+
+#include "datatypes.h" // For DirContextTreeNode
+#include <stdbool.h>   // For bool
+#include <stdio.h>     // For FILE*
+
+// --- String Utilities ---
+
+// Safely copy a string, ensuring null termination.
+// Similar to strncpy but guarantees null termination if n > 0.
+// Returns dest.
+char *safe_strncpy(char *dest, const char *src, size_t n);
+
+// Trim trailing newline characters (LF or CRLF) from a string in-place.
+void trim_trailing_newline(char *str);
+
+// --- File I/O Utilities ---
+
+// Read an entire line from a file stream, dynamically allocating memory.
+// The caller is responsible for freeing the returned string.
+// Returns NULL on EOF or error.
+char *read_line_from_file(FILE *fp);
+
+// --- Error Handling ---
+// Basic error reporting, can be expanded.
+void log_error(const char *message_format, ...);
+void log_info(const char *message_format, ...);
+void log_debug(const char *message_format, ...); // Controlled by a DEBUG flag
+
+// --- Tree Utilities ---
+
+// Recursively free the memory allocated for a DirContextTreeNode and its
+// children.
+void free_tree_recursive(DirContextTreeNode *node);
+
+// Create a new tree node.
+// `disk_path_for_stat` is the path used to stat the file/dir to get its mod
+// time and type. `relative_path_in_archive` is the path that will be stored in
+// the .dircontxt file.
+DirContextTreeNode *create_node(NodeType type,
+                                const char *relative_path_in_archive,
+                                const char *disk_path_for_stat);
+
+// Add a child node to a parent node's children list (handles dynamic array).
+bool add_child_to_parent_node(DirContextTreeNode *parent,
+                              DirContextTreeNode *child);
+
+// Get the base name of a directory (e.g., "myfolder" from "/path/to/myfolder/"
+// or "/path/to/myfolder") The caller is responsible for freeing the returned
+// string.
+char *get_directory_basename(const char *path);
+
+// For debug printing of the tree structure
+void print_tree_recursive(const DirContextTreeNode *node, int indent_level);
+
+#endif // UTILS_H
+</FILE_CONTENT_END ID="F008">
+
+<FILE_CONTENT_START ID="F009" PATH="src/dctx_reader.h">
+#ifndef DCTX_READER_H
+#define DCTX_READER_H
+
+#include "datatypes.h" // For DirContextTreeNode
+#include <stdbool.h>
+#include <stdio.h> // For FILE*
+
+// --- Core .dircontxt Reading Functions ---
+
+// Parses a .dircontxt binary file and reconstructs the directory tree in
+// memory.
+//
+// Parameters:
+//   dctx_filepath: Path to the .dircontxt binary file.
+//   root_node_out: Pointer to a DirContextTreeNode pointer. On success, this
+//   will
+//                  be updated to point to the root of the reconstructed tree.
+//                  The caller is responsible for freeing this tree using
+//                  free_tree_recursive().
+//   data_section_start_offset_out: (Optional) Pointer to a uint64_t to store
+//   the byte offset
+//                                  in the .dircontxt file where the actual file
+//                                  data section begins.
+//
+// Returns:
+//   True if parsing was successful, false otherwise (e.g., bad signature,
+//   format error).
+bool dctx_read_and_parse_header(const char *dctx_filepath,
+                                DirContextTreeNode **root_node_out,
+                                uint64_t *data_section_start_offset_out);
+
+// Reads the raw content of a specific file from an opened .dircontxt file
+// stream. Assumes the file stream `dctx_fp` is already opened and positioned
+// correctly, and that `data_section_start_offset_in_file` is known.
+//
+// Parameters:
+//   dctx_fp: An opened FILE stream for the .dircontxt file.
+//   data_section_start_offset_in_file: The absolute byte offset where the data
+//   section begins in dctx_fp. file_node_info: A DirContextTreeNode (for a
+//   file) containing its content_offset_in_data_section
+//                   and content_size.
+//   buffer_out: A caller-allocated buffer to store the file content.
+//   buffer_size: The size of buffer_out. Must be >=
+//   file_node_info->content_size.
+//
+// Returns:
+//   True if content was read successfully into buffer_out, false on error
+//   (e.g., seek error, read error). The content in buffer_out is NOT
+//   null-terminated by this function unless it was in the original file.
+bool dctx_read_file_content(FILE *dctx_fp,
+                            uint64_t data_section_start_offset_in_file,
+                            const DirContextTreeNode *file_node_info,
+                            char *buffer_out, size_t buffer_size);
+
+// A convenience function to open, parse header, read file content, and close.
+// The caller is responsible for freeing `content_buffer_out` if it's allocated
+// by this function (or if this function requires the caller to pre-allocate it
+// and pass its size). For now, let's assume caller pre-allocates and
+// `content_buffer_out` is filled.
+//
+// Parameters:
+//   dctx_filepath: Path to the .dircontxt binary file.
+//   target_relative_path: The relative path of the file to extract from the
+//   archive. content_buffer_out: Pointer to a char pointer. If successful, will
+//   point to dynamically allocated buffer
+//                       containing file content. Caller must free.
+//   content_size_out: Pointer to store the size of the extracted content.
+//
+// Returns:
+//   True if successful, false otherwise.
+// bool dctx_extract_file_by_path(const char* dctx_filepath,
+//                                const char* target_relative_path,
+//                                char** content_buffer_out,
+//                                uint64_t* content_size_out);
+// NOTE: For the LLM formatter, we'll iterate the tree and use
+// dctx_read_file_content directly.
+//       The dctx_extract_file_by_path might be useful for other utilities
+//       later.
+
+#endif // DCTX_READER_H
+</FILE_CONTENT_END ID="F009">
+
+<FILE_CONTENT_START ID="F010" PATH="src/ignore.h">
+#ifndef IGNORE_H
+#define IGNORE_H
+
+#include "datatypes.h" // For IgnoreRule, MAX_PATH_LEN
+#include <stdbool.h>
+
+#define DEFAULT_IGNORE_FILENAME ".dircontxtignore"
+
+// --- Core Ignore List Functions ---
+
+// MODIFIED: Updated documentation to reflect the new ignore hierarchy.
+// Loads ignore rules from three sources in a specific order of precedence:
+// 1. Hardcoded Default Rules: A built-in list of common ignores (e.g., .git/).
+// 2. Global Ignore File: Rules from a user-wide file
+// (~/.config/dircontxt/ignore).
+// 3. Project Ignore File: Rules from .dircontxtignore in the target directory.
+// Rules loaded later override rules loaded earlier if they match the same file.
+//
+// Parameters:
+//   base_dir_path: Absolute path to the target directory.
+//   output_filename_to_ignore: The name of the .dircontxt file being generated,
+//                              which will also be ignored.
+//   rules_array_out: Pointer to an array of IgnoreRule structs that will be
+//                    allocated and filled.
+//   rule_count_out: Pointer to an integer to store the total number of rules
+//   loaded.
+//
+// Returns:
+//   True if successful, false on a critical error (like memory allocation
+//   failure).
+bool load_ignore_rules(const char *base_dir_path,
+                       const char *output_filename_to_ignore,
+                       IgnoreRule **rules_array_out, int *rule_count_out);
+
+// Checks if a given item (file or directory) should be ignored based on the
+// full list of loaded rules. The logic is based on "last matching rule wins",
+// allowing negation patterns (!) to work correctly.
+//
+// Parameters:
+//   item_relative_path: Path of the item relative to the dircontxt root (e.g.,
+//   "src/file.c"). item_name: Just the name of the item (e.g., "file.c").
+//   is_item_dir: True if the item is a directory, false if it's a file.
+//   rules: Array of loaded IgnoreRule structs.
+//   rule_count: Number of rules in the array.
+//
+// Returns:
+//   True if the item should be ignored, false otherwise.
+bool should_ignore_item(const char *item_relative_path, const char *item_name,
+                        bool is_item_dir, const IgnoreRule *rules,
+                        int rule_count);
+
+// Frees the memory allocated for the ignore rules array.
+void free_ignore_rules_array(IgnoreRule *rules_array, int rule_count);
+
+// Parses a single line from an ignore file into an IgnoreRule struct.
+// This function understands advanced syntax like negation ('!'), directory
+// markers ('/'), and wildcards ('*').
+bool parse_ignore_pattern_line(const char *line, IgnoreRule *rule_out);
+
+#endif // IGNORE_H
+</FILE_CONTENT_END ID="F010">
+
+<FILE_CONTENT_START ID="F011" PATH="src/walker.h">
+#ifndef WALKER_H
+#define WALKER_H
+
+#include "datatypes.h" // For DirContextTreeNode, IgnoreRule
+#include <stdbool.h>
+
+// --- Core Directory Walking Function ---
+
+// Walks the specified directory recursively, building a tree of
+// DirContextTreeNode. It respects the ignore rules provided.
+//
+// Parameters:
+//   target_dir_path: Absolute path of the directory to start walking from.
+//   ignore_rules: Array of loaded IgnoreRule structs.
+//   ignore_rule_count: Number of rules in the ignore_rules array.
+//   processed_item_count_out: (Optional) Pointer to an int to store the total
+//   number of files and directories processed (not ignored).
+//
+// Returns:
+//   A pointer to the root DirContextTreeNode of the generated tree.
+//   The root node itself represents the target_dir_path.
+//   Returns NULL on critical error (e.g., target_dir_path is not a directory or
+//   unreadable). The caller is responsible for freeing the returned tree using
+//   free_tree_recursive().
+DirContextTreeNode *walk_directory_and_build_tree(
+    const char *target_dir_path, const IgnoreRule *ignore_rules,
+    int ignore_rule_count, int *processed_item_count_out);
+
+#endif // WALKER_H
+</FILE_CONTENT_END ID="F011">
+
+<FILE_CONTENT_START ID="F012" PATH="src/writer.c">
+#include "writer.h"
+#include "platform.h" // For platform_join_paths, etc. (if needed, though mostly paths are in nodes)
+#include "utils.h" // For log_info, log_error, log_debug, safe_strncpy
+
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// --- Static Helper Function Declarations ---
+
+// Pass 1: Recursively traverses the tree. For files, it copies their content to
+// data_stream,
+//         updates their content_offset and content_size in the node, and
+//         accumulates the total data offset.
+static bool collect_file_data_and_update_nodes_recursive(
+    DirContextTreeNode *node,
+    FILE *data_stream, /* Temp file for concatenated file data */
+    uint64_t *current_data_offset_accumulator);
+
+// Pass 2: Recursively traverses the tree (now with updated file nodes) and
+// serializes
+//         each node's metadata to the header_stream.
+static bool
+serialize_header_recursive(const DirContextTreeNode *node,
+                           FILE *header_stream); /* Temp file for header data */
+
+// Helper to write a single node's metadata to the header stream
+static bool serialize_single_node(const DirContextTreeNode *node,
+                                  FILE *header_stream);
+
+// Helper to copy content from one file stream to another
+static bool copy_stream_content(FILE *dest, FILE *src);
+
+// --- Implementation of Static Helper Functions ---
+
+static bool collect_file_data_and_update_nodes_recursive(
+    DirContextTreeNode *node, FILE *data_stream,
+    uint64_t *current_data_offset_accumulator) {
+  if (node == NULL)
+    return true; // Base case for recursion
+
+  if (node->type == NODE_TYPE_FILE) {
+    node->content_offset_in_data_section = *current_data_offset_accumulator;
+    node->content_size = 0; // Initialize size
+
+    FILE *src_file = fopen(node->disk_path, "rb"); // disk_path is absolute
+    if (src_file == NULL) {
+      log_error("Failed to open source file %s for reading: %s",
+                node->disk_path, strerror(errno));
+      // Decide how to handle: skip file (size 0) or abort? Let's skip.
+      return true; // Continue with other files
+    }
+
+    log_debug("Writing data for file: %s (offset: %llu)", node->relative_path,
+              (unsigned long long)node->content_offset_in_data_section);
+
+    // Copy content and count bytes
+    int c;
+    size_t bytes_written_for_this_file = 0;
+    while ((c = fgetc(src_file)) != EOF) {
+      if (fputc(c, data_stream) == EOF) {
+        log_error("Failed to write data to temporary data stream for %s: %s",
+                  node->disk_path, strerror(errno));
+        fclose(src_file);
+        return false; // Critical error
+      }
+      bytes_written_for_this_file++;
+    }
+
+    if (ferror(src_file)) {
+      log_error("Error reading from source file %s: %s", node->disk_path,
+                strerror(errno));
+      // Continue, but size might be incomplete
+    }
+    fclose(src_file);
+
+    node->content_size = bytes_written_for_this_file;
+    *current_data_offset_accumulator += node->content_size;
+
+    log_debug("Finished data for file: %s (size: %llu, new total offset: %llu)",
+              node->relative_path, (unsigned long long)node->content_size,
+              (unsigned long long)*current_data_offset_accumulator);
+
+  } else if (node->type == NODE_TYPE_DIRECTORY) {
+    for (uint32_t i = 0; i < node->num_children; ++i) {
+      if (!collect_file_data_and_update_nodes_recursive(
+              node->children[i], data_stream,
+              current_data_offset_accumulator)) {
+        return false; // Propagate error
+      }
+    }
+  }
+  return true;
+}
+
+static bool serialize_single_node(const DirContextTreeNode *node,
+                                  FILE *header_stream) {
+  // 1. Node Type (1 byte)
+  uint8_t node_type_byte = (uint8_t)node->type;
+  if (fwrite(&node_type_byte, sizeof(uint8_t), 1, header_stream) != 1)
+    return false;
+
+  // 2. Full Relative Path Length (uint16_t, 2 bytes)
+  uint16_t path_len = (uint16_t)strlen(node->relative_path);
+  if (fwrite(&path_len, sizeof(uint16_t), 1, header_stream) != 1)
+    return false;
+
+  // 3. Full Relative Path (Variable length, UTF-8)
+  if (path_len > 0) {
+    if (fwrite(node->relative_path, sizeof(char), path_len, header_stream) !=
+        path_len)
+      return false;
+  }
+
+  // 4. Last Modified Timestamp (uint64_t, 8 bytes)
+  if (fwrite(&node->last_modified_timestamp, sizeof(uint64_t), 1,
+             header_stream) != 1)
+    return false;
+
+  if (node->type == NODE_TYPE_FILE) {
+    // 5. Content Offset in Data Section (uint64_t, 8 bytes)
+    if (fwrite(&node->content_offset_in_data_section, sizeof(uint64_t), 1,
+               header_stream) != 1)
+      return false;
+    // 6. Content Size (uint64_t, 8 bytes)
+    if (fwrite(&node->content_size, sizeof(uint64_t), 1, header_stream) != 1)
+      return false;
+  } else if (node->type == NODE_TYPE_DIRECTORY) {
+    // 5. Number of Children (uint32_t, 4 bytes)
+    if (fwrite(&node->num_children, sizeof(uint32_t), 1, header_stream) != 1)
+      return false;
+  }
+  return true;
+}
+
+static bool serialize_header_recursive(const DirContextTreeNode *node,
+                                       FILE *header_stream) {
+  if (node == NULL)
+    return true; // Base case
+
+  // Write current node's metadata (Pre-order traversal for header)
+  log_debug("Serializing header for: %s (type: %d)", node->relative_path,
+            node->type);
+  if (!serialize_single_node(node, header_stream)) {
+    log_error("Failed to serialize node data for %s to header stream.",
+              node->relative_path);
+    return false;
+  }
+
+  if (node->type == NODE_TYPE_DIRECTORY) {
+    for (uint32_t i = 0; i < node->num_children; ++i) {
+      if (!serialize_header_recursive(node->children[i], header_stream)) {
+        return false; // Propagate error
+      }
+    }
+  }
+  return true;
+}
+
+static bool copy_stream_content(FILE *dest, FILE *src) {
+  rewind(src); // Ensure we start from the beginning of the source stream
+  int c;
+  while ((c = fgetc(src)) != EOF) {
+    if (fputc(c, dest) == EOF) {
+      log_error("Failed to copy stream content: fputc error: %s",
+                strerror(errno));
+      return false;
+    }
+  }
+  if (ferror(src)) {
+    log_error("Failed to copy stream content: ferror on src: %s",
+              strerror(errno));
+    return false;
+  }
+  return true;
+}
+
+// --- Public Function Implementation ---
+
+bool write_dircontxt_file(const char *output_filepath,
+                          DirContextTreeNode *root_node) {
+  if (output_filepath == NULL || root_node == NULL) {
+    log_error("Output filepath or root node is NULL.");
+    return false;
+  }
+
+  FILE *header_temp_fp = NULL;
+  FILE *data_temp_fp = NULL;
+  FILE *output_fp = NULL;
+  bool success = false;
+
+  // Use tmpfile() to create temporary files that are automatically deleted on
+  // close or program termination.
+  header_temp_fp = tmpfile();
+  if (header_temp_fp == NULL) {
+    log_error("Failed to create temporary file for header: %s",
+              strerror(errno));
+    goto cleanup;
+  }
+
+  data_temp_fp = tmpfile();
+  if (data_temp_fp == NULL) {
+    log_error("Failed to create temporary file for data: %s", strerror(errno));
+    goto cleanup;
+  }
+
+  // Pass 1: Collect all file data into data_temp_fp and update node
+  // offsets/sizes
+  log_info("Pass 1: Collecting file data...");
+  uint64_t total_data_offset = 0;
+  if (!collect_file_data_and_update_nodes_recursive(root_node, data_temp_fp,
+                                                    &total_data_offset)) {
+    log_error("Failed during file data collection pass.");
+    goto cleanup;
+  }
+  log_info(
+      "Pass 1: File data collection complete. Total data size: %llu bytes.",
+      (unsigned long long)total_data_offset);
+  fflush(data_temp_fp); // Ensure all data is written to the temp file
+
+  // Pass 2: Serialize the header (tree structure) to header_temp_fp
+  log_info("Pass 2: Serializing header data...");
+  if (!serialize_header_recursive(root_node, header_temp_fp)) {
+    log_error("Failed during header serialization pass.");
+    goto cleanup;
+  }
+  log_info("Pass 2: Header data serialization complete.");
+  fflush(header_temp_fp); // Ensure all header data is written
+
+  // Now, assemble the final file
+  output_fp = fopen(output_filepath, "wb");
+  if (output_fp == NULL) {
+    log_error("Failed to open output file %s for writing: %s", output_filepath,
+              strerror(errno));
+    goto cleanup;
+  }
+
+  log_info("Assembling final file: %s", output_filepath);
+
+  // 1. Write Signature
+  if (fwrite(DIRCONTXT_FILE_SIGNATURE, 1, DIRCONTXT_SIGNATURE_LEN, output_fp) !=
+      DIRCONTXT_SIGNATURE_LEN) {
+    log_error("Failed to write file signature to %s.", output_filepath);
+    goto cleanup;
+  }
+
+  // 2. Write Header Section (from header_temp_fp)
+  if (!copy_stream_content(output_fp, header_temp_fp)) {
+    log_error("Failed to copy header temp content to output file %s.",
+              output_filepath);
+    goto cleanup;
+  }
+
+  // 3. Write Data Section (from data_temp_fp)
+  if (!copy_stream_content(output_fp, data_temp_fp)) {
+    log_error("Failed to copy data temp content to output file %s.",
+              output_filepath);
+    goto cleanup;
+  }
+
+  log_info("Successfully wrote .dircontxt file: %s", output_filepath);
+  success = true;
+
+cleanup:
+  if (header_temp_fp != NULL)
+    fclose(header_temp_fp); // tmpfile() handles deletion
+  if (data_temp_fp != NULL)
+    fclose(data_temp_fp); // tmpfile() handles deletion
+  if (output_fp != NULL) {
+    if (fclose(output_fp) == EOF &&
+        success) { // Only log fclose error if we thought we succeeded
+      log_error("Error closing output file %s: %s", output_filepath,
+                strerror(errno));
+      success = false; // An error on close means it might not be fully
+                       // written/flushed
+    }
+  }
+  if (!success &&
+      output_filepath !=
+          NULL) { // If something went wrong, try to delete partial output file
+                  // remove(output_filepath); // Optionally remove on failure
+  }
+
+  return success;
+}
+</FILE_CONTENT_END ID="F012">
+
+<FILE_CONTENT_START ID="F013" PATH="src/llm_formatter.c">
+#include "llm_formatter.h"
+#include "datatypes.h"
+#include "dctx_reader.h"
+#include "utils.h"
+
+#include <ctype.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h> // For strcasecmp (POSIX)
+#include <time.h>
+
+// --- Static Helper Function Declarations ---
+// MODIFIED: write_manifest_entry_recursive now takes non-const node to store ID
+static void write_manifest_entry_recursive(FILE *llm_fp,
+                                           DirContextTreeNode *node,
+                                           int indent_level,
+                                           int *shared_id_counter);
+
+static bool
+write_file_content_block(FILE *llm_fp, const DirContextTreeNode *file_node,
+                         // const char *file_node_id_str, // No longer needed,
+                         // use node->generated_id_for_llm
+                         FILE *dctx_binary_fp,
+                         uint64_t data_section_start_offset_in_dctx_file);
+
+static bool is_likely_binary(const char *buffer, size_t size);
+
+// MODIFIED: write_all_file_content_blocks_recursive no longer needs its own ID
+// counter
+static bool write_all_file_content_blocks_recursive(
+    FILE *llm_fp, const DirContextTreeNode *node, FILE *dctx_binary_fp,
+    uint64_t data_section_start_offset_in_dctx_file);
+
+// --- Implementation of Static Helper Functions ---
+
+// MODIFIED: Takes non-const DirContextTreeNode *node to store
+// generated_id_for_llm
+static void write_manifest_entry_recursive(FILE *llm_fp,
+                                           DirContextTreeNode *node,
+                                           int indent_level,
+                                           int *shared_id_counter) {
+  if (node == NULL)
+    return;
+
+  for (int i = 0; i < indent_level; ++i) {
+    fprintf(llm_fp, "  ");
+  }
+
+  // Generate and store ID in the node
+  if (node->type == NODE_TYPE_DIRECTORY) {
+    if (indent_level == 0) {
+      strcpy(node->generated_id_for_llm, "ROOT");
+    } else {
+      snprintf(node->generated_id_for_llm, sizeof(node->generated_id_for_llm),
+               "D%03d", (*shared_id_counter)++);
+    }
+    fprintf(llm_fp, "[D] %s (ID:%s, MOD:%lld)\n", node->relative_path,
+            node->generated_id_for_llm,
+            (long long)node->last_modified_timestamp);
+
+    for (uint32_t i = 0; i < node->num_children; ++i) {
+      write_manifest_entry_recursive(llm_fp, node->children[i],
+                                     indent_level + 1, shared_id_counter);
+    }
+  } else { // NODE_TYPE_FILE
+    snprintf(node->generated_id_for_llm, sizeof(node->generated_id_for_llm),
+             "F%03d", (*shared_id_counter)++);
+    fprintf(llm_fp, "[F] %s (ID:%s, MOD:%lld, SIZE:%lld", node->relative_path,
+            node->generated_id_for_llm,
+            (long long)node->last_modified_timestamp,
+            (long long)node->content_size);
+
+    const char *ext = strrchr(node->relative_path, '.');
+    bool likely_binary_by_ext = false;
+    if (ext) {
+      const char *binary_exts[] = {
+          ".png", ".jpg",  ".jpeg",   ".gif", ".bmp",  ".tiff", ".ico",
+          ".mp3", ".wav",  ".aac",    ".ogg", ".flac", ".mp4",  ".mov",
+          ".avi", ".mkv",  ".webm",   ".exe", ".dll",  ".so",   ".dylib",
+          ".o",   ".a",    ".lib",    ".zip", ".gz",   ".tar",  ".bz2",
+          ".rar", ".7z",   ".pdf",    ".doc", ".docx", ".xls",  ".xlsx",
+          ".ppt", ".pptx", ".bin",    ".dat", ".iso",  ".img",  ".class",
+          ".jar", ".pyc",  ".sqlite", ".db"};
+      for (size_t i = 0; i < sizeof(binary_exts) / sizeof(binary_exts[0]);
+           ++i) {
+        if (strcasecmp(ext, binary_exts[i]) == 0) {
+          likely_binary_by_ext = true;
+          break;
+        }
+      }
+    }
+    if (likely_binary_by_ext) {
+      fprintf(llm_fp, ", CONTENT:BINARY_HINT");
+    }
+    fprintf(llm_fp, ")\n");
+  }
+}
+
+static bool is_likely_binary(const char *buffer, size_t size) {
+  if (size == 0)
+    return false;
+  int non_printable_count = 0;
+  const size_t check_limit = size < 512 ? size : 512;
+
+  for (size_t i = 0; i < check_limit; ++i) {
+    if (buffer[i] == '\0')
+      return true;
+    if (!isprint((unsigned char)buffer[i]) && buffer[i] != '\n' &&
+        buffer[i] != '\r' && buffer[i] != '\t') {
+      non_printable_count++;
+    }
+  }
+  if (check_limit > 0 &&
+      ((float)non_printable_count / (float)check_limit > 0.20)) {
+    return true;
+  }
+  return false;
+}
+
+// MODIFIED: Removed file_node_id_str parameter, uses node->generated_id_for_llm
+static bool
+write_file_content_block(FILE *llm_fp, const DirContextTreeNode *file_node,
+                         FILE *dctx_binary_fp,
+                         uint64_t data_section_start_offset_in_dctx_file) {
+  if (file_node->type != NODE_TYPE_FILE)
+    return true;
+  if (file_node->generated_id_for_llm[0] == '\0') { // Check if ID was generated
+    log_error("llm_formatter: Skipping content block for file '%s' due to "
+              "missing generated ID.",
+              file_node->relative_path);
+    return true; // Continue with other files
+  }
+
+  fprintf(llm_fp, "\n<FILE_CONTENT_START ID=\"%s\" PATH=\"%s\">\n",
+          file_node->generated_id_for_llm, file_node->relative_path);
+
+  if (file_node->content_size == 0) {
+    // Empty file
+  } else {
+    char *content_buffer = (char *)malloc(file_node->content_size);
+    if (content_buffer == NULL) {
+      log_error("llm_formatter: Failed to allocate buffer for file content of "
+                "'%s' (size %llu).",
+                file_node->relative_path,
+                (unsigned long long)file_node->content_size);
+      fprintf(llm_fp,
+              "[ERROR: Could not allocate memory to read file content]\n");
+    } else {
+      if (!dctx_read_file_content(
+              dctx_binary_fp, data_section_start_offset_in_dctx_file, file_node,
+              content_buffer, file_node->content_size)) {
+        log_error("llm_formatter: Failed to read content for file '%s' from "
+                  ".dircontxt.",
+                  file_node->relative_path);
+        fprintf(
+            llm_fp,
+            "[ERROR: Could not read file content from .dircontxt binary]\n");
+      } else {
+        if (is_likely_binary(content_buffer, file_node->content_size)) {
+          fprintf(llm_fp, "[BINARY CONTENT PLACEHOLDER - Size: %llu bytes]\n",
+                  (unsigned long long)file_node->content_size);
+        } else {
+          if (fwrite(content_buffer, 1, file_node->content_size, llm_fp) !=
+              file_node->content_size) {
+            log_error("llm_formatter: Failed to write content of '%s' to LLM "
+                      "text file: %s",
+                      file_node->relative_path, strerror(errno));
+            fprintf(llm_fp,
+                    "[ERROR: Failed to write content to output file]\n");
+          }
+        }
+      }
+      free(content_buffer);
+    }
+  }
+
+  fprintf(llm_fp, "</FILE_CONTENT_END ID=\"%s\">\n",
+          file_node->generated_id_for_llm);
+  return true;
+}
+
+// MODIFIED: Removed file_id_counter parameter
+static bool write_all_file_content_blocks_recursive(
+    FILE *llm_fp, const DirContextTreeNode *node, FILE *dctx_binary_fp,
+    uint64_t data_section_start_offset_in_dctx_file) {
+  if (node == NULL)
+    return true;
+
+  if (node->type == NODE_TYPE_FILE) {
+    write_file_content_block(llm_fp, node, dctx_binary_fp,
+                             data_section_start_offset_in_dctx_file);
+  } else if (node->type == NODE_TYPE_DIRECTORY) {
+    for (uint32_t i = 0; i < node->num_children; ++i) {
+      write_all_file_content_blocks_recursive(
+          llm_fp, node->children[i], dctx_binary_fp,
+          data_section_start_offset_in_dctx_file);
+    }
+  }
+  return true;
+}
+
+// MODIFIED: generate_llm_context_file now takes non-const root_node
+bool generate_llm_context_file(
+    const char *llm_txt_filepath,
+    DirContextTreeNode *root_node, // Made non-const
+    const char *dctx_binary_filepath,
+    uint64_t data_section_start_offset_in_dctx_file) {
+  if (llm_txt_filepath == NULL || root_node == NULL ||
+      dctx_binary_filepath == NULL) {
+    log_error("llm_formatter: Invalid arguments (NULL path or root_node).");
+    return false;
+  }
+
+  FILE *llm_fp = fopen(llm_txt_filepath, "w");
+  if (llm_fp == NULL) {
+    log_error(
+        "llm_formatter: Failed to open LLM context file '%s' for writing: %s",
+        llm_txt_filepath, strerror(errno));
+    return false;
+  }
+
+  FILE *dctx_binary_fp = NULL;
+  bool overall_success = true;
+
+  fprintf(llm_fp, "[DIRCONTXT_LLM_SNAPSHOT_V1.2]\n\n");
+  fprintf(llm_fp, "<INSTRUCTIONS>\n");
+  fprintf(llm_fp, "1. Manifest: The \"DIRECTORY_TREE\" section below lists all "
+                  "files and directories.\n");
+  fprintf(llm_fp, "   - Each entry: [TYPE] RELATIVE_PATH (ID:UNIQUE_ID, "
+                  "MOD:UNIX_TIMESTAMP, SIZE:BYTES)\n");
+  fprintf(llm_fp, "   - TYPE is [D] for directory, [F] for file.\n");
+  fprintf(llm_fp, "   - SIZE is for files only.\n");
+  fprintf(llm_fp, "   - Binary files may be noted with (CONTENT:BINARY_HINT or "
+                  "CONTENT:BINARY_PLACEHOLDER).\n");
+  fprintf(llm_fp, "2. Content Access: To read a specific file:\n");
+  fprintf(llm_fp, "   - Find its UNIQUE_ID from the DIRECTORY_TREE.\n");
+  fprintf(
+      llm_fp,
+      "   - Search for the marker: <FILE_CONTENT_START ID=\"UNIQUE_ID\">\n");
+  fprintf(llm_fp, "   - The content is between this marker and "
+                  "<FILE_CONTENT_END ID=\"UNIQUE_ID\">\n");
+  fprintf(llm_fp, "</INSTRUCTIONS>\n\n");
+
+  fprintf(llm_fp, "<DIRECTORY_TREE>\n");
+  // MODIFIED: Use a single shared counter for Dxxx and Fxxx IDs
+  int shared_id_counter = 1;
+  write_manifest_entry_recursive(
+      llm_fp, root_node, 0, &shared_id_counter); // Pass non-const root_node
+  fprintf(llm_fp, "</DIRECTORY_TREE>\n");
+
+  dctx_binary_fp = fopen(dctx_binary_filepath, "rb");
+  if (dctx_binary_fp == NULL) {
+    log_error("llm_formatter: Failed to open .dircontxt binary '%s' for "
+              "reading content: %s",
+              dctx_binary_filepath, strerror(errno));
+    overall_success = false;
+  } else {
+    // MODIFIED: No longer pass separate file_id_counter
+    write_all_file_content_blocks_recursive(
+        llm_fp, root_node, dctx_binary_fp,
+        data_section_start_offset_in_dctx_file);
+  }
+
+  fprintf(llm_fp, "\n[END_DIRCONTXT_LLM_SNAPSHOT]\n");
+
+  if (dctx_binary_fp != NULL) {
+    fclose(dctx_binary_fp);
+  }
+  if (llm_fp != NULL) {
+    if (fflush(llm_fp) == EOF) {
+      log_error("llm_formatter: Error flushing LLM context file '%s': %s",
+                llm_txt_filepath, strerror(errno));
+      overall_success = false;
+    }
+    if (ferror(llm_fp)) {
+      log_error(
+          "llm_formatter: A write error occurred on LLM context file '%s'.",
+          llm_txt_filepath);
+      overall_success = false;
+    }
+    if (fclose(llm_fp) == EOF) {
+      log_error("llm_formatter: Error closing LLM context file '%s': %s",
+                llm_txt_filepath, strerror(errno));
+      overall_success = false;
+    }
+  }
+
+  if (overall_success) {
+    log_info("llm_formatter: Successfully generated LLM context file: %s",
+             llm_txt_filepath);
+  } else {
+    log_error("llm_formatter: Errors occurred during generation of LLM context "
+              "file: %s",
+              llm_txt_filepath);
+  }
+
+  return overall_success;
+}
+</FILE_CONTENT_END ID="F013">
+
+<FILE_CONTENT_START ID="F014" PATH="src/platform.c">
+#include "platform.h"
+#include "datatypes.h" // For MAX_PATH_LEN
+
+#include <errno.h>  // For errno
+#include <libgen.h> // For dirname and basename POSIX functions
+#include <stdio.h>
+#include <stdlib.h> // For realpath, malloc, free
+#include <string.h> // For strrchr, strlen, strcpy, strncpy
+
+// --- Filesystem Operations ---
+
+int platform_get_file_stat(const char *path, struct stat *stat_buf) {
+  if (stat(path, stat_buf) != 0) {
+    // perror("platform_get_file_stat - stat"); // Optional: for debugging
+    return -1;
+  }
+  return 0;
+}
+
+bool platform_is_dir(const struct stat *stat_buf) {
+  return S_ISDIR(stat_buf->st_mode);
+}
+
+bool platform_is_reg_file(const struct stat *stat_buf) {
+  return S_ISREG(stat_buf->st_mode);
+}
+
+uint64_t platform_get_mod_time(const struct stat *stat_buf) {
+  // On macOS, st_mtimespec.tv_sec is preferred for higher precision if needed,
+  // but st_mtime is standard POSIX and gives seconds, which is what we need for
+  // Unix timestamp.
+  return (uint64_t)stat_buf->st_mtime;
+}
+
+bool platform_resolve_path(const char *path, char *resolved_path_out,
+                           size_t out_buffer_size) {
+  char *real_path_result = realpath(path, NULL); // Allocate buffer for realpath
+  if (real_path_result == NULL) {
+    // perror("platform_resolve_path - realpath"); // Optional: for debugging
+    return false;
+  }
+
+  if (strlen(real_path_result) + 1 > out_buffer_size) {
+    fprintf(stderr, "Error: Resolved path exceeds buffer size.\n");
+    free(real_path_result);
+    return false;
+  }
+
+  strncpy(resolved_path_out, real_path_result, out_buffer_size - 1);
+  resolved_path_out[out_buffer_size - 1] = '\0'; // Ensure null termination
+  free(real_path_result);
+  return true;
+}
+
+// POSIX basename can modify its input if it's not a const char*,
+// and the returned pointer is to static storage or part of the input.
+// For our usage with const char*, it should be safe to just return its result.
+const char *platform_get_basename(const char *path) {
+  // To avoid modifying the input `path` if `basename` were to do so,
+  // and to handle cases where `path` might be an empty string or "/",
+  // we can create a temporary copy for `basename`.
+  // However, the POSIX spec for `basename(const char*)` implies it shouldn't
+  // modify if const. A truly safe way would be to copy `path` first if there's
+  // any doubt. For simplicity here, let's assume `basename` from `libgen.h`
+  // behaves well with `const char *`.
+
+  if (path == NULL)
+    return "."; // Or some other sensible default for NULL input
+
+  // If path is empty or just "/", basename might return "." or "/".
+  // Let's handle a few edge cases to ensure we don't return an empty string.
+  if (path[0] == '\0')
+    return ".";
+
+  // A more robust custom basename that doesn't rely on libgen.h's potential
+  // quirks:
+  const char *last_slash = strrchr(path, PLATFORM_DIR_SEPARATOR);
+  if (last_slash) {
+    // Check if the slash is the last character (e.g. "foo/")
+    if (*(last_slash + 1) == '\0') {
+      // It's a trailing slash. We need to find the segment before it.
+      // Create a temporary mutable copy to strip trailing slashes.
+      char temp_path[MAX_PATH_LEN];
+      strncpy(temp_path, path, MAX_PATH_LEN - 1);
+      temp_path[MAX_PATH_LEN - 1] = '\0';
+
+      // Remove trailing slashes
+      size_t len = strlen(temp_path);
+      while (len > 0 && temp_path[len - 1] == PLATFORM_DIR_SEPARATOR) {
+        temp_path[--len] = '\0';
+      }
+      // If all slashes, temp_path is now empty, should return "/" conceptually
+      if (len == 0 && path[0] == PLATFORM_DIR_SEPARATOR)
+        return PLATFORM_DIR_SEPARATOR_STR;
+      if (len == 0)
+        return ".";
+
+      const char *new_last_slash = strrchr(temp_path, PLATFORM_DIR_SEPARATOR);
+      if (new_last_slash) {
+        // Need to return a string that persists.
+        // This simple version just points into the temp_path, which is bad.
+        // For a robust solution, platform_get_basename would need to return a
+        // char* that the caller frees, or use a static buffer (not
+        // thread-safe). Let's stick to libgen.h basename for now, it's simpler.
+      } else {
+        // return strdup(temp_path); // If we were returning char* to be freed
+      }
+    }
+    // Standard case: return the part after the last slash
+    return last_slash + 1;
+  }
+  // No slash found, the path itself is the basename
+  return path;
+
+  // Using libgen.h's basename:
+  // char* path_copy = strdup(path); // POSIX basename might modify its argument
+  // if (!path_copy) { perror("strdup in platform_get_basename"); return "."; }
+  // char* bname = basename(path_copy);
+  // const char* result = strdup(bname); // Make a copy of the result
+  // free(path_copy);
+  // if (!result) { perror("strdup for basename result"); return "."; }
+  // return result; // CALLER MUST FREE THIS
+  // For now, let's go with the simpler, less robust custom one for const char*
+}
+
+// POSIX dirname can modify its input string. It also might return a pointer to
+// static storage. To make it safer: copy the input path first.
+char *platform_get_dirname(const char *path) {
+  if (path == NULL)
+    return NULL;
+
+  char *path_copy = strdup(path);
+  if (!path_copy) {
+    perror("platform_get_dirname - strdup");
+    return NULL; // Or strdup(".") if preferred
+  }
+
+  char *dir_name_ptr = dirname(path_copy); // dirname operates on path_copy
+
+  // strdup the result from dirname because dirname might return a pointer
+  // to static storage or a modification of path_copy. We want an independent
+  // string.
+  char *result = strdup(dir_name_ptr);
+  if (!result) {
+    perror("platform_get_dirname - strdup result");
+    free(path_copy);
+    return NULL; // Or strdup(".")
+  }
+
+  free(path_copy); // Free the initial copy
+  return result;   // Caller is responsible for freeing this returned string
+}
+
+// --- Path Manipulation ---
+
+bool platform_join_paths(const char *base_path, const char *component,
+                         char *result_path_buffer, size_t buffer_size) {
+  if (!base_path || !component || !result_path_buffer) {
+    return false;
+  }
+
+  size_t base_len = strlen(base_path);
+  size_t component_len = strlen(component);
+
+  // Check for buffer overflow before doing anything
+  // Need space for base_len, component_len, potential separator, and null
+  // terminator
+  if (base_len + component_len + 2 > buffer_size) { // +2 for separator and '\0'
+    fprintf(stderr, "Error: Joined path exceeds buffer size.\n");
+    return false;
+  }
+
+  strcpy(result_path_buffer, base_path);
+
+  // Add separator if base_path is not empty and doesn't already end with one,
+  // and component doesn't start with one (for absolute components, though less
+  // common here).
+  if (base_len > 0 &&
+      result_path_buffer[base_len - 1] != PLATFORM_DIR_SEPARATOR &&
+      component[0] != PLATFORM_DIR_SEPARATOR) {
+    result_path_buffer[base_len] = PLATFORM_DIR_SEPARATOR;
+    result_path_buffer[base_len + 1] =
+        '\0'; // Null-terminate after adding separator
+  } else if (base_len > 0 &&
+             result_path_buffer[base_len - 1] == PLATFORM_DIR_SEPARATOR &&
+             component[0] == PLATFORM_DIR_SEPARATOR) {
+    // Avoid double separators if base ends with / and component starts with /
+    // Move to the start of component (effectively skipping its leading /)
+    strcat(result_path_buffer, component + 1);
+    return true;
+  }
+
+  strcat(result_path_buffer, component);
+  return true;
+}
+</FILE_CONTENT_END ID="F014">
+
+<FILE_CONTENT_START ID="F015" PATH="src/datatypes.h">
+#ifndef DATATYPES_H
+#define DATATYPES_H
+
+#include <limits.h> // For PATH_MAX (though we'll define our own if not available)
+#include <stdbool.h> // For bool
+#include <stdint.h>  // For uint64_t, uint32_t, uint16_t, uint8_t
+
+// Define MAX_PATH_LEN if PATH_MAX is not suitably defined or to have a
+// consistent buffer
+#ifndef MAX_PATH_LEN
+#ifdef PATH_MAX
+#define MAX_PATH_LEN PATH_MAX
+#else
+#define MAX_PATH_LEN 4096 // A common fallback
+#endif
+#endif
+
+// Forward declaration for the tree node structure
+struct DirContextTreeNode;
+
+// **************************************************************************
+// FIX: Added the missing definition for NodeType.
+// This must be defined before it is used inside DirContextTreeNode.
+typedef enum { NODE_TYPE_FILE, NODE_TYPE_DIRECTORY } NodeType;
+// **************************************************************************
+
+// Enum to define the type of pattern match for an ignore rule.
+typedef enum {
+  PATTERN_TYPE_INVALID,
+  PATTERN_TYPE_BASENAME, // Matches only the file/dir name (e.g.,
+                         // "node_modules")
+  PATTERN_TYPE_PATH,     // Matches the full relative path (e.g., "src/main.c")
+  PATTERN_TYPE_SUFFIX,   // Matches a suffix wildcard (e.g., "*.log")
+  PATTERN_TYPE_PREFIX,   // Matches a prefix wildcard (e.g., "build/*")
+} PatternType;
+
+// The IgnoreRule struct is now more descriptive.
+typedef struct {
+  char pattern[MAX_PATH_LEN];
+  PatternType type;
+  bool is_dir_only;
+  bool is_negation; // Set to true if the pattern starts with '!'
+} IgnoreRule;
+
+// Structure for representing a file or directory in our in-memory tree
+typedef struct DirContextTreeNode {
+  NodeType type; // This line now works correctly.
+  char relative_path[MAX_PATH_LEN];
+  uint64_t last_modified_timestamp;
+
+  // --- For files ---
+  uint64_t content_offset_in_data_section;
+  uint64_t content_size;
+  char disk_path[MAX_PATH_LEN];
+
+  // --- For directories ---
+  struct DirContextTreeNode **children;
+  uint32_t num_children;
+  uint32_t children_capacity;
+
+  // --- ADDED FOR LLM FORMATTER ID STORAGE ---
+  char generated_id_for_llm[20]; // To store IDs like "F001", "D002", "ROOT"
+
+} DirContextTreeNode;
+
+#endif // DATATYPES_H
+</FILE_CONTENT_END ID="F015">
+
+<FILE_CONTENT_START ID="F016" PATH="src/walker.c">
+#define _GNU_SOURCE // For D_TYPE in dirent on some Linux systems, generally
+                    // good for compatibility
+#include "walker.h"
+#include "ignore.h" // For should_ignore_item
+#include "platform.h" // For platform_get_file_stat, platform_is_dir, platform_join_paths, etc.
+#include "utils.h" // For create_node, add_child_to_parent_node, log_debug, log_error
+
+#include <dirent.h> // For opendir, readdir, closedir
+#include <errno.h>  // For errno
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// Internal recursive helper function for walk_directory_and_build_tree
+static bool walk_recursive_helper(
+    DirContextTreeNode *current_parent_node,
+    const char *current_parent_disk_path, // Absolute path of
+                                          // current_parent_node on disk
+    const char
+        *base_target_disk_path, // Absolute path of the initial target directory
+    const IgnoreRule *ignore_rules, int ignore_rule_count,
+    int *processed_item_count_out) {
+  DIR *dir_stream = opendir(current_parent_disk_path);
+  if (dir_stream == NULL) {
+    log_error("Failed to open directory %s: %s", current_parent_disk_path,
+              strerror(errno));
+    return false; // Cannot proceed with this directory
+  }
+
+  log_debug("Walking directory: %s (relative in archive: '%s')",
+            current_parent_disk_path, current_parent_node->relative_path);
+
+  struct dirent *entry;
+  while ((entry = readdir(dir_stream)) != NULL) {
+    const char *entry_name = entry->d_name;
+
+    // Skip "." and ".." entries
+    if (strcmp(entry_name, ".") == 0 || strcmp(entry_name, "..") == 0) {
+      continue;
+    }
+
+    char child_disk_path[MAX_PATH_LEN];
+    if (!platform_join_paths(current_parent_disk_path, entry_name,
+                             child_disk_path, MAX_PATH_LEN)) {
+      log_error("Failed to construct child disk path for %s in %s", entry_name,
+                current_parent_disk_path);
+      continue; // Skip this entry
+    }
+
+    char child_relative_path_in_archive[MAX_PATH_LEN];
+    if (strlen(current_parent_node->relative_path) == 0 ||
+        (strlen(current_parent_node->relative_path) == 1 &&
+         current_parent_node->relative_path[0] == '.')) {
+      // If parent is the root ("" or "."), child's relative path is just its
+      // name
+      safe_strncpy(child_relative_path_in_archive, entry_name, MAX_PATH_LEN);
+    } else {
+      if (!platform_join_paths(current_parent_node->relative_path, entry_name,
+                               child_relative_path_in_archive, MAX_PATH_LEN)) {
+        log_error("Failed to construct child relative path for %s under %s",
+                  entry_name, current_parent_node->relative_path);
+        continue; // Skip this entry
+      }
+    }
+
+    struct stat stat_buf;
+    if (platform_get_file_stat(child_disk_path, &stat_buf) != 0) {
+      log_error("Failed to stat %s: %s. Skipping.", child_disk_path,
+                strerror(errno));
+      continue;
+    }
+
+    bool is_child_dir = platform_is_dir(&stat_buf);
+    bool is_child_file = platform_is_reg_file(&stat_buf);
+
+    if (!is_child_dir && !is_child_file) {
+      log_debug("Skipping non-file/non-directory item: %s", child_disk_path);
+      continue; // Skip sockets, pipes, etc.
+    }
+
+    // Prepare path for should_ignore_item (needs trailing slash for dirs if
+    // rules expect it)
+    char effective_relative_path_for_ignore[MAX_PATH_LEN];
+    safe_strncpy(effective_relative_path_for_ignore,
+                 child_relative_path_in_archive, MAX_PATH_LEN);
+    if (is_child_dir) {
+      size_t len = strlen(effective_relative_path_for_ignore);
+      if (len > 0 &&
+          effective_relative_path_for_ignore[len - 1] !=
+              PLATFORM_DIR_SEPARATOR &&
+          len < MAX_PATH_LEN - 1) {
+        effective_relative_path_for_ignore[len] = PLATFORM_DIR_SEPARATOR;
+        effective_relative_path_for_ignore[len + 1] = '\0';
+      }
+    }
+
+    if (should_ignore_item(effective_relative_path_for_ignore, entry_name,
+                           is_child_dir, ignore_rules, ignore_rule_count)) {
+      log_debug("Ignoring: %s (relative: %s)", child_disk_path,
+                child_relative_path_in_archive);
+      continue;
+    }
+
+    log_debug("Processing: %s (relative: %s)", child_disk_path,
+              child_relative_path_in_archive);
+    if (processed_item_count_out) {
+      (*processed_item_count_out)++;
+    }
+
+    NodeType node_type = is_child_dir ? NODE_TYPE_DIRECTORY : NODE_TYPE_FILE;
+    DirContextTreeNode *child_node =
+        create_node(node_type, child_relative_path_in_archive, child_disk_path);
+    if (child_node == NULL) {
+      log_error("Failed to create tree node for %s. Skipping.",
+                child_disk_path);
+      continue; // Critical error creating node
+    }
+
+    if (!add_child_to_parent_node(current_parent_node, child_node)) {
+      log_error("Failed to add child node %s to parent %s. Skipping.",
+                child_disk_path, current_parent_disk_path);
+      free_tree_recursive(child_node); // Clean up unattached child
+      continue;
+    }
+
+    if (is_child_dir) {
+      // Recursively walk the subdirectory
+      if (!walk_recursive_helper(child_node, child_disk_path,
+                                 base_target_disk_path, ignore_rules,
+                                 ignore_rule_count, processed_item_count_out)) {
+        // Error occurred in subdirectory, but we can continue with other
+        // siblings
+        log_debug("Error walking subdirectory %s, but continuing.",
+                  child_disk_path);
+      }
+    }
+  } // end while readdir
+
+  if (errno != 0 &&
+      dir_stream !=
+          NULL) { // Check for readdir errors if loop terminated unexpectedly
+    log_error("Error reading directory %s: %s", current_parent_disk_path,
+              strerror(errno));
+  }
+
+  closedir(dir_stream);
+  return true; // Successfully walked this directory (or handled errors within
+               // it)
+}
+
+DirContextTreeNode *walk_directory_and_build_tree(
+    const char *target_dir_path_on_disk, // This is absolute
+    const IgnoreRule *ignore_rules, int ignore_rule_count,
+    int *processed_item_count_out) {
+  if (target_dir_path_on_disk == NULL) {
+    log_error("Target directory path is NULL.");
+    return NULL;
+  }
+  if (processed_item_count_out) {
+    *processed_item_count_out = 0;
+  }
+
+  struct stat stat_buf;
+  if (platform_get_file_stat(target_dir_path_on_disk, &stat_buf) != 0) {
+    log_error("Failed to stat target directory %s: %s", target_dir_path_on_disk,
+              strerror(errno));
+    return NULL;
+  }
+  if (!platform_is_dir(&stat_buf)) {
+    log_error("Target path %s is not a directory.", target_dir_path_on_disk);
+    return NULL;
+  }
+
+  // The root node's relative path in the archive is effectively "." or empty
+  // string, representing the base of the walked directory. For consistency,
+  // let's use an empty string for the root's relative_path if it's the true
+  // root. Or, if `dircontxt .` is run, the `target_dir_path_on_disk` name
+  // itself could be the root in some contexts, but our archive format implies
+  // relative paths from the walked root.
+  DirContextTreeNode *root_node =
+      create_node(NODE_TYPE_DIRECTORY, "", target_dir_path_on_disk);
+  if (root_node == NULL) {
+    log_error("Failed to create root node for directory %s.",
+              target_dir_path_on_disk);
+    return NULL;
+  }
+
+  // For the root node itself, count it if processed_item_count_out is provided
+  // (assuming the root directory itself isn't ignored by a specific rule, which
+  // is unlikely here)
+  if (processed_item_count_out) {
+    (*processed_item_count_out)++;
+  }
+
+  log_info("Starting directory walk from: %s", target_dir_path_on_disk);
+
+  if (!walk_recursive_helper(root_node, target_dir_path_on_disk,
+                             target_dir_path_on_disk, ignore_rules,
+                             ignore_rule_count, processed_item_count_out)) {
+    // If the helper returns false, it means opendir failed on the root, which
+    // is critical.
+    log_error("Initial directory walk failed for %s.", target_dir_path_on_disk);
+    free_tree_recursive(root_node);
+    return NULL;
+  }
+
+  log_info("Directory walk completed. Processed %d items (files/dirs).",
+           (processed_item_count_out ? *processed_item_count_out : 0));
+  return root_node;
+}
+</FILE_CONTENT_END ID="F016">
+
+<FILE_CONTENT_START ID="F017" PATH="src/ignore.c">
+#include "ignore.h"
+// FIX 1: Added datatypes.h to resolve the 'NodeType' and 'IgnoreRule'
+// definitions before they are used in other included headers.
+#include "datatypes.h"
+#include "platform.h" // For platform_join_paths, PLATFORM_DIR_SEPARATOR_STR, PLATFORM_DIR_SEPARATOR
+#include "utils.h" // For log_debug, log_info, log_error, read_line_from_file, trim_trailing_newline, safe_strncpy
+
+#include <ctype.h> // For isspace
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// --- Helper Functions ---
+
+// Helper to add a rule to the dynamic array of rules.
+static bool add_rule_to_list(IgnoreRule rule, IgnoreRule **rules_array_out,
+                             int *rule_count_out, int *capacity_out) {
+  if (*rule_count_out >= *capacity_out) {
+    int new_capacity = (*capacity_out == 0) ? 16 : *capacity_out * 2;
+    IgnoreRule *new_array = (IgnoreRule *)realloc(
+        *rules_array_out, new_capacity * sizeof(IgnoreRule));
+    if (new_array == NULL) {
+      perror("add_rule_to_list: realloc failed");
+      return false;
+    }
+    *rules_array_out = new_array;
+    *capacity_out = new_capacity;
+  }
+  (*rules_array_out)[*rule_count_out] = rule; // Struct copy
+  (*rule_count_out)++;
+  return true;
+}
+
+// Helper to load rules from a specific file path into the rules list.
+static bool load_rules_from_file(const char *filepath,
+                                 IgnoreRule **rules_array_out,
+                                 int *rule_count_out, int *capacity_out) {
+  FILE *fp = fopen(filepath, "r");
+  if (fp == NULL) {
+    if (errno != ENOENT) { // Report error only if it's not "File Not Found"
+      log_info("Could not read ignore file %s: %s.", filepath, strerror(errno));
+    }
+    return true; // It's not an error for an ignore file to be missing.
+  }
+
+  log_info("Loading ignore rules from: %s", filepath);
+  char *line;
+  while ((line = read_line_from_file(fp)) != NULL) {
+    IgnoreRule rule;
+    if (parse_ignore_pattern_line(line, &rule)) {
+      // FIX 2: Removed the extra '&' from capacity_out. It is already a
+      // pointer.
+      if (!add_rule_to_list(rule, rules_array_out, rule_count_out,
+                            capacity_out)) {
+        free(line);
+        fclose(fp);
+        return false;
+      }
+    }
+    free(line);
+  }
+  fclose(fp);
+  return true;
+}
+
+// --- Public Function Implementations ---
+
+// MODIFIED: Rewritten to parse the new, more advanced syntax.
+bool parse_ignore_pattern_line(const char *orig_line, IgnoreRule *rule_out) {
+  if (orig_line == NULL || rule_out == NULL)
+    return false;
+
+  char line_buffer[MAX_PATH_LEN];
+  safe_strncpy(line_buffer, orig_line, MAX_PATH_LEN);
+  trim_trailing_newline(line_buffer);
+
+  const char *line = line_buffer;
+  // Trim leading whitespace
+  while (isspace((unsigned char)*line))
+    line++;
+
+  // Handle comments and empty lines
+  if (line[0] == '\0' || line[0] == '#') {
+    return false;
+  }
+
+  memset(rule_out, 0, sizeof(IgnoreRule));
+  rule_out->type = PATTERN_TYPE_INVALID; // Default to invalid
+
+  // Check for negation
+  if (line[0] == '!') {
+    rule_out->is_negation = true;
+    line++; // Advance past the '!'
+  }
+
+  safe_strncpy(rule_out->pattern, line, MAX_PATH_LEN);
+  size_t len = strlen(rule_out->pattern);
+
+  // Check if it's a directory-only pattern
+  if (len > 0 && rule_out->pattern[len - 1] == PLATFORM_DIR_SEPARATOR) {
+    rule_out->is_dir_only = true;
+    rule_out->pattern[len - 1] = '\0'; // Remove trailing slash
+    len--;
+  }
+
+  // Determine pattern type
+  if (strchr(rule_out->pattern, PLATFORM_DIR_SEPARATOR) != NULL) {
+    // Contains a '/', so it's a path-based match
+    rule_out->type = PATTERN_TYPE_PATH;
+    if (len > 0 && rule_out->pattern[len - 1] == '*') {
+      rule_out->type = PATTERN_TYPE_PREFIX;
+      rule_out->pattern[len - 1] = '\0'; // remove the '*'
+    }
+  } else if (len > 0 && rule_out->pattern[0] == '*') {
+    // Starts with '*', so it's a suffix match (e.g., "*.log")
+    rule_out->type = PATTERN_TYPE_SUFFIX;
+    // Shift pattern to the left to remove '*'
+    memmove(rule_out->pattern, rule_out->pattern + 1, len);
+  } else if (len > 0) {
+    // No '/' and doesn't start with '*', so it's a basename match
+    rule_out->type = PATTERN_TYPE_BASENAME;
+  }
+
+  // A pattern is only valid if we successfully assigned a type
+  return rule_out->type != PATTERN_TYPE_INVALID;
+}
+
+// MODIFIED: Rewritten to load from default, global, and project sources.
+bool load_ignore_rules(const char *base_dir_path,
+                       const char *output_filename_to_ignore,
+                       IgnoreRule **rules_array_out, int *rule_count_out) {
+  *rules_array_out = NULL;
+  *rule_count_out = 0;
+  int capacity = 0;
+
+  // --- 1. Add Hardcoded Default Rules (Lowest Priority) ---
+  const char *default_patterns[] = {".git/", ".DS_Store", "node_modules/"};
+  for (size_t i = 0; i < sizeof(default_patterns) / sizeof(default_patterns[0]);
+       i++) {
+    IgnoreRule rule;
+    if (parse_ignore_pattern_line(default_patterns[i], &rule)) {
+      add_rule_to_list(rule, rules_array_out, rule_count_out, &capacity);
+    }
+  }
+  // Also ignore the output file itself
+  if (output_filename_to_ignore && output_filename_to_ignore[0] != '\0') {
+    IgnoreRule rule;
+    if (parse_ignore_pattern_line(output_filename_to_ignore, &rule)) {
+      add_rule_to_list(rule, rules_array_out, rule_count_out, &capacity);
+    }
+  }
+
+  // --- 2. Load Global Ignore File (Medium Priority) ---
+  const char *home_dir = getenv("HOME");
+  if (home_dir) {
+    char global_ignore_path[MAX_PATH_LEN];
+    snprintf(global_ignore_path, MAX_PATH_LEN, "%s/.config/dircontxt/ignore",
+             home_dir);
+    if (!load_rules_from_file(global_ignore_path, rules_array_out,
+                              rule_count_out, &capacity))
+      return false; // Critical error
+  }
+
+  // --- 3. Load Project-Specific Ignore File (Highest Priority) ---
+  char project_ignore_path[MAX_PATH_LEN];
+  if (platform_join_paths(base_dir_path, DEFAULT_IGNORE_FILENAME,
+                          project_ignore_path, MAX_PATH_LEN)) {
+    if (!load_rules_from_file(project_ignore_path, rules_array_out,
+                              rule_count_out, &capacity))
+      return false; // Critical error
+  }
+
+  return true;
+}
+
+// MODIFIED: Rewritten to let the last matching rule win.
+bool should_ignore_item(const char *item_relative_path, const char *item_name,
+                        bool is_item_dir, const IgnoreRule *rules,
+                        int rule_count) {
+  if (rules == NULL || rule_count == 0) {
+    return false;
+  }
+
+  bool is_ignored = false; // Default to not ignored
+
+  for (int i = 0; i < rule_count; ++i) {
+    const IgnoreRule *rule = &rules[i];
+    bool matched = false;
+
+    // Skip directory-only rules for files
+    if (rule->is_dir_only && !is_item_dir) {
+      continue;
+    }
+
+    switch (rule->type) {
+    // FIX 3: Added a case for PATTERN_TYPE_INVALID to handle all enum values.
+    case PATTERN_TYPE_INVALID:
+      break;
+
+    case PATTERN_TYPE_PATH:
+      // Exact path match
+      if (strcmp(item_relative_path, rule->pattern) == 0) {
+        matched = true;
+      }
+      break;
+    case PATTERN_TYPE_PREFIX:
+      // Path prefix match
+      if (strncmp(item_relative_path, rule->pattern, strlen(rule->pattern)) ==
+          0) {
+        matched = true;
+      }
+      break;
+    case PATTERN_TYPE_BASENAME:
+      // Match against just the file/folder name
+      if (strcmp(item_name, rule->pattern) == 0) {
+        matched = true;
+      }
+      break;
+
+    case PATTERN_TYPE_SUFFIX: {
+      // FIX 4: Added curly braces to create a scope for the declarations.
+      // Match against the end of the file/folder name
+      size_t item_name_len = strlen(item_name);
+      size_t pattern_len = strlen(rule->pattern);
+      if (item_name_len >= pattern_len &&
+          strcmp(item_name + (item_name_len - pattern_len), rule->pattern) ==
+              0) {
+        matched = true;
+      }
+      break;
+    }
+    }
+
+    if (matched) {
+      // The last rule that matches determines the outcome.
+      is_ignored = !rule->is_negation;
+    }
+  }
+
+  return is_ignored;
+}
+
+void free_ignore_rules_array(IgnoreRule *rules_array, int rule_count) {
+  (void)rule_count;
+  if (rules_array != NULL) {
+    free(rules_array);
+  }
+}
+</FILE_CONTENT_END ID="F017">
+
+<FILE_CONTENT_START ID="F018" PATH="src/dctx_reader.c">
+#include "dctx_reader.h"
+#include "platform.h" // For platform_get_mod_time (though not strictly needed here as it's read from file)
+#include "utils.h" // For create_node, add_child_to_parent_node, log_error, log_debug, safe_strncpy
+#include "writer.h" // For DIRCONTXT_FILE_SIGNATURE, DIRCONTXT_SIGNATURE_LEN
+
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// --- Static Helper Function Declarations ---
+
+// Reads a single node's metadata from the file stream and populates a new
+// DirContextTreeNode. It does NOT handle reading children for directory nodes;
+// that's done by the recursive caller.
+static DirContextTreeNode *read_single_node_metadata(FILE *fp);
+
+// Recursively reads child nodes for a directory node.
+static bool
+read_children_for_directory_node(FILE *fp, DirContextTreeNode *parent_dir_node);
+
+// --- Implementation of Static Helper Functions ---
+
+static DirContextTreeNode *read_single_node_metadata(FILE *fp) {
+  DirContextTreeNode temp_node_data; // Temporary stack storage to read into
+  memset(&temp_node_data, 0, sizeof(DirContextTreeNode));
+
+  // 1. Node Type (1 byte)
+  uint8_t node_type_byte;
+  if (fread(&node_type_byte, sizeof(uint8_t), 1, fp) != 1) {
+    log_error("dctx_reader: Failed to read node type: %s",
+              feof(fp) ? "EOF" : strerror(errno));
+    return NULL;
+  }
+  temp_node_data.type = (NodeType)node_type_byte;
+
+  // 2. Full Relative Path Length (uint16_t, 2 bytes)
+  uint16_t path_len;
+  if (fread(&path_len, sizeof(uint16_t), 1, fp) != 1) {
+    log_error("dctx_reader: Failed to read path length: %s",
+              feof(fp) ? "EOF" : strerror(errno));
+    return NULL;
+  }
+
+  // 3. Full Relative Path (Variable length, UTF-8)
+  if (path_len > MAX_PATH_LEN - 1) { // -1 for null terminator
+    log_error("dctx_reader: Path length %u exceeds MAX_PATH_LEN %d.", path_len,
+              MAX_PATH_LEN);
+    return NULL;
+  }
+  if (path_len > 0) {
+    if (fread(temp_node_data.relative_path, sizeof(char), path_len, fp) !=
+        path_len) {
+      log_error("dctx_reader: Failed to read path string: %s",
+                feof(fp) ? "EOF" : strerror(errno));
+      return NULL;
+    }
+  }
+  temp_node_data.relative_path[path_len] = '\0'; // Ensure null termination
+
+  // 4. Last Modified Timestamp (uint64_t, 8 bytes)
+  if (fread(&temp_node_data.last_modified_timestamp, sizeof(uint64_t), 1, fp) !=
+      1) {
+    log_error(
+        "dctx_reader: Failed to read last modified timestamp for '%s': %s",
+        temp_node_data.relative_path, feof(fp) ? "EOF" : strerror(errno));
+    return NULL;
+  }
+
+  if (temp_node_data.type == NODE_TYPE_FILE) {
+    // 5. Content Offset in Data Section (uint64_t, 8 bytes)
+    if (fread(&temp_node_data.content_offset_in_data_section, sizeof(uint64_t),
+              1, fp) != 1) {
+      log_error("dctx_reader: Failed to read content offset for file '%s': %s",
+                temp_node_data.relative_path,
+                feof(fp) ? "EOF" : strerror(errno));
+      return NULL;
+    }
+    // 6. Content Size (uint64_t, 8 bytes)
+    if (fread(&temp_node_data.content_size, sizeof(uint64_t), 1, fp) != 1) {
+      log_error("dctx_reader: Failed to read content size for file '%s': %s",
+                temp_node_data.relative_path,
+                feof(fp) ? "EOF" : strerror(errno));
+      return NULL;
+    }
+  } else if (temp_node_data.type == NODE_TYPE_DIRECTORY) {
+    // 5. Number of Children (uint32_t, 4 bytes)
+    if (fread(&temp_node_data.num_children, sizeof(uint32_t), 1, fp) != 1) {
+      log_error("dctx_reader: Failed to read num children for dir '%s': %s",
+                temp_node_data.relative_path,
+                feof(fp) ? "EOF" : strerror(errno));
+      return NULL;
+    }
+    // For directories read from file, initialize capacity for children array
+    // later
+    temp_node_data.children_capacity =
+        temp_node_data.num_children; // We know exactly how many
+  } else {
+    log_error("dctx_reader: Unknown node type %d encountered for '%s'.",
+              temp_node_data.type, temp_node_data.relative_path);
+    return NULL;
+  }
+
+  // Allocate the actual node on the heap and copy data
+  // We use create_node from utils.c as it initializes some fields, but we
+  // overwrite most. The disk_path for statting is not relevant here, as we are
+  // reading from archive. We can pass an empty string or its relative_path for
+  // disk_path if create_node requires it.
+  DirContextTreeNode *new_node =
+      (DirContextTreeNode *)malloc(sizeof(DirContextTreeNode));
+  if (!new_node) {
+    perror("dctx_reader: malloc for new_node failed");
+    return NULL;
+  }
+  *new_node = temp_node_data; // Copy all parsed data
+
+  // If it's a directory and has children, allocate the children array
+  if (new_node->type == NODE_TYPE_DIRECTORY && new_node->num_children > 0) {
+    new_node->children = (DirContextTreeNode **)calloc(
+        new_node->num_children, sizeof(DirContextTreeNode *));
+    if (new_node->children == NULL) {
+      perror("dctx_reader: calloc for children array failed");
+      free(new_node);
+      return NULL;
+    }
+  } else {
+    new_node->children =
+        NULL; // Ensure it's NULL if no children or not a directory
+  }
+  // disk_path is not meaningful when reading from archive, ensure it's empty or
+  // handled.
+  new_node->disk_path[0] = '\0';
+
+  log_debug("dctx_reader: Read node metadata: path='%s', type=%d, mod=%llu",
+            new_node->relative_path, new_node->type,
+            (unsigned long long)new_node->last_modified_timestamp);
+  if (new_node->type == NODE_TYPE_FILE) {
+    log_debug("  File: offset=%llu, size=%llu",
+              (unsigned long long)new_node->content_offset_in_data_section,
+              (unsigned long long)new_node->content_size);
+  } else {
+    log_debug("  Dir: num_children=%u", new_node->num_children);
+  }
+
+  return new_node;
+}
+
+static bool
+read_children_for_directory_node(FILE *fp,
+                                 DirContextTreeNode *parent_dir_node) {
+  if (parent_dir_node->type != NODE_TYPE_DIRECTORY)
+    return true; // Should not happen
+
+  for (uint32_t i = 0; i < parent_dir_node->num_children; ++i) {
+    DirContextTreeNode *child_node = read_single_node_metadata(fp);
+    if (child_node == NULL) {
+      log_error(
+          "dctx_reader: Failed to read metadata for child %u of dir '%s'.", i,
+          parent_dir_node->relative_path);
+      // Cleanup: free previously read children of this parent before returning
+      // error
+      for (uint32_t j = 0; j < i; ++j) {
+        free_tree_recursive(parent_dir_node->children[j]);
+      }
+      // free(parent_dir_node->children); // Children array would be freed by
+      // free_tree_recursive on parent parent_dir_node->num_children = 0; //
+      // Mark as having no valid children parsed
+      return false;
+    }
+    parent_dir_node->children[i] = child_node;
+
+    // Recursively read children for this child_node if it's also a directory
+    if (child_node->type == NODE_TYPE_DIRECTORY) {
+      if (!read_children_for_directory_node(fp, child_node)) {
+        // Error in deeper recursion. child_node and its partially read children
+        // will be freed when parent_dir_node is eventually freed. To be very
+        // robust, one might try to clean up more specifically here.
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+// --- Public Function Implementations ---
+
+bool dctx_read_and_parse_header(const char *dctx_filepath,
+                                DirContextTreeNode **root_node_out,
+                                uint64_t *data_section_start_offset_out) {
+  if (dctx_filepath == NULL || root_node_out == NULL) {
+    log_error(
+        "dctx_reader: Invalid arguments (filepath or root_node_out is NULL).");
+    return false;
+  }
+  *root_node_out = NULL; // Initialize output
+
+  FILE *fp = fopen(dctx_filepath, "rb");
+  if (fp == NULL) {
+    log_error("dctx_reader: Failed to open .dircontxt file '%s': %s",
+              dctx_filepath, strerror(errno));
+    return false;
+  }
+
+  bool success = false; // Assume failure until all steps complete
+
+  // 1. Read and Verify Signature
+  char signature_buf[DIRCONTXT_SIGNATURE_LEN + 1]; // +1 for safety null term
+  if (fread(signature_buf, 1, DIRCONTXT_SIGNATURE_LEN, fp) !=
+      DIRCONTXT_SIGNATURE_LEN) {
+    log_error("dctx_reader: Failed to read file signature from '%s'.",
+              dctx_filepath);
+    goto cleanup;
+  }
+  signature_buf[DIRCONTXT_SIGNATURE_LEN] = '\0';
+  if (strcmp(signature_buf, DIRCONTXT_FILE_SIGNATURE) != 0) {
+    log_error(
+        "dctx_reader: Invalid file signature in '%s'. Expected '%s', got '%s'.",
+        dctx_filepath, DIRCONTXT_FILE_SIGNATURE, signature_buf);
+    goto cleanup;
+  }
+  log_debug("dctx_reader: File signature verified.");
+
+  // 2. Read the Root Node's metadata
+  //    The first node after signature is always the root.
+  DirContextTreeNode *root = read_single_node_metadata(fp);
+  if (root == NULL) {
+    log_error("dctx_reader: Failed to read root node metadata from '%s'.",
+              dctx_filepath);
+    goto cleanup;
+  }
+  if (root->type != NODE_TYPE_DIRECTORY) {
+    log_error("dctx_reader: Root node in '%s' is not a directory (type: %d). "
+              "Corrupted file.",
+              dctx_filepath, root->type);
+    free_tree_recursive(root); // Free the incorrectly typed root
+    goto cleanup;
+  }
+
+  // 3. Recursively Read Children for the Root Node
+  if (root->num_children > 0) {
+    if (!read_children_for_directory_node(fp, root)) {
+      log_error("dctx_reader: Failed to read children for root node in '%s'.",
+                dctx_filepath);
+      free_tree_recursive(root); // Free partially built tree
+      goto cleanup;
+    }
+  }
+
+  // If successful so far, the entire tree structure (header) has been read.
+  // The current file pointer position in 'fp' is now at the start of the Data
+  // Section.
+  if (data_section_start_offset_out != NULL) {
+    long current_pos = ftell(fp);
+    if (current_pos == -1L) {
+      log_error("dctx_reader: ftell failed after reading header: %s",
+                strerror(errno));
+      free_tree_recursive(root);
+      goto cleanup;
+    }
+    *data_section_start_offset_out = (uint64_t)current_pos;
+    log_debug("dctx_reader: Data section starts at offset %llu.",
+              (unsigned long long)*data_section_start_offset_out);
+  }
+
+  *root_node_out = root;
+  success = true;
+  log_info("dctx_reader: Successfully parsed header of '%s'.", dctx_filepath);
+
+cleanup:
+  if (fp != NULL) {
+    fclose(fp);
+  }
+  if (!success &&
+      *root_node_out != NULL) { // If we set root_node_out but then failed
+    free_tree_recursive(*root_node_out);
+    *root_node_out = NULL;
+  }
+  return success;
+}
+
+bool dctx_read_file_content(FILE *dctx_fp,
+                            uint64_t data_section_start_offset_in_file,
+                            const DirContextTreeNode *file_node_info,
+                            char *buffer_out, size_t buffer_size) {
+  if (dctx_fp == NULL || file_node_info == NULL || buffer_out == NULL) {
+    log_error("dctx_read_file_content: Invalid arguments.");
+    return false;
+  }
+  if (file_node_info->type != NODE_TYPE_FILE) {
+    log_error("dctx_read_file_content: Node '%s' is not a file.",
+              file_node_info->relative_path);
+    return false;
+  }
+  if (buffer_size < file_node_info->content_size) {
+    log_error("dctx_read_file_content: Buffer too small for file '%s' (need "
+              "%llu, got %zu).",
+              file_node_info->relative_path,
+              (unsigned long long)file_node_info->content_size, buffer_size);
+    return false;
+  }
+
+  uint64_t absolute_file_offset =
+      data_section_start_offset_in_file +
+      file_node_info->content_offset_in_data_section;
+
+  if (fseek(dctx_fp, (long)absolute_file_offset, SEEK_SET) != 0) {
+    log_error("dctx_read_file_content: Failed to seek to offset %llu for file "
+              "'%s': %s",
+              (unsigned long long)absolute_file_offset,
+              file_node_info->relative_path, strerror(errno));
+    return false;
+  }
+
+  size_t bytes_read =
+      fread(buffer_out, 1, file_node_info->content_size, dctx_fp);
+  if (bytes_read != file_node_info->content_size) {
+    log_error("dctx_read_file_content: Failed to read content for file '%s'. "
+              "Expected %llu bytes, got %zu. Error: %s",
+              file_node_info->relative_path,
+              (unsigned long long)file_node_info->content_size, bytes_read,
+              feof(dctx_fp) ? "EOF" : strerror(errno));
+    return false;
+  }
+
+  log_debug(
+      "dctx_read_file_content: Successfully read %llu bytes for file '%s'.",
+      (unsigned long long)file_node_info->content_size,
+      file_node_info->relative_path);
+  return true;
+}
+</FILE_CONTENT_END ID="F018">
+
+<FILE_CONTENT_START ID="F019" PATH="src/utils.c">
+#include "utils.h"
+#include "platform.h" // For PLATFORM_DIR_SEPARATOR
+
+#include <errno.h>  // For errno, perror
+#include <stdarg.h> // For va_list, va_start, va_end
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// --- String Utilities ---
+
+char *safe_strncpy(char *dest, const char *src, size_t n) {
+  if (n == 0)
+    return dest;
+  strncpy(dest, src, n - 1);
+  dest[n - 1] = '\0'; // Ensure null termination
+  return dest;
+}
+
+void trim_trailing_newline(char *str) {
+  if (str == NULL)
+    return;
+  size_t len = strlen(str);
+  while (len > 0 && (str[len - 1] == '\n' || str[len - 1] == '\r')) {
+    str[--len] = '\0';
+  }
+}
+
+// --- File I/O Utilities ---
+
+char *read_line_from_file(FILE *fp) {
+  if (fp == NULL)
+    return NULL;
+
+  size_t buffer_size = 128;
+  char *buffer = (char *)malloc(buffer_size);
+  if (buffer == NULL) {
+    perror("read_line_from_file: malloc failed for buffer");
+    return NULL;
+  }
+
+  size_t current_pos = 0;
+  int c;
+
+  while ((c = fgetc(fp)) != EOF && c != '\n') {
+    if (current_pos >= buffer_size - 1) {
+      buffer_size *= 2;
+      char *new_buffer = (char *)realloc(buffer, buffer_size);
+      if (new_buffer == NULL) {
+        perror("read_line_from_file: realloc failed for buffer");
+        free(buffer);
+        return NULL;
+      }
+      buffer = new_buffer;
+    }
+    buffer[current_pos++] = (char)c;
+  }
+
+  buffer[current_pos] = '\0';
+
+  if (c == EOF && current_pos == 0) {
+    free(buffer);
+    return NULL;
+  }
+
+  return buffer;
+}
+
+// --- Error Handling ---
+#ifndef NDEBUG
+#define DEBUG_LOGGING_ENABLED 1
+#else
+#define DEBUG_LOGGING_ENABLED 0
+#endif
+
+void log_error(const char *message_format, ...) {
+  fprintf(stderr, "[ERROR] ");
+  va_list args;
+  va_start(args, message_format);
+  vfprintf(stderr, message_format, args);
+  va_end(args);
+  fprintf(stderr, "\n");
+}
+
+void log_info(const char *message_format, ...) {
+  printf("[INFO] ");
+  va_list args;
+  va_start(args, message_format);
+  vprintf(message_format, args);
+  va_end(args);
+  printf("\n");
+}
+
+void log_debug(const char *message_format, ...) {
+  if (DEBUG_LOGGING_ENABLED) {
+    printf("[DEBUG] ");
+    va_list args;
+    va_start(args, message_format);
+    vprintf(message_format, args);
+    va_end(args);
+    printf("\n");
+  }
+}
+
+// --- Tree Utilities ---
+
+void free_tree_recursive(DirContextTreeNode *node) {
+  if (node == NULL) {
+    return;
+  }
+  if (node->type == NODE_TYPE_DIRECTORY) {
+    for (uint32_t i = 0; i < node->num_children; ++i) {
+      free_tree_recursive(node->children[i]);
+    }
+    free(node->children);
+  }
+  free(node);
+}
+
+DirContextTreeNode *create_node(NodeType type,
+                                const char *relative_path_in_archive,
+                                const char *disk_path_for_stat) {
+  DirContextTreeNode *node =
+      (DirContextTreeNode *)malloc(sizeof(DirContextTreeNode));
+  if (node == NULL) {
+    perror("create_node: malloc failed");
+    return NULL;
+  }
+
+  node->type = type;
+  safe_strncpy(node->relative_path, relative_path_in_archive, MAX_PATH_LEN);
+  safe_strncpy(node->disk_path, disk_path_for_stat, MAX_PATH_LEN);
+
+  struct stat stat_buf;
+  if (platform_get_file_stat(disk_path_for_stat, &stat_buf) == 0) {
+    node->last_modified_timestamp = platform_get_mod_time(&stat_buf);
+  } else {
+    log_error("Failed to stat %s, setting timestamp to 0.", disk_path_for_stat);
+    node->last_modified_timestamp = 0;
+  }
+
+  node->content_offset_in_data_section = 0;
+  node->content_size = 0;
+
+  node->children = NULL;
+  node->num_children = 0;
+  node->children_capacity = 0;
+
+  // MODIFIED HERE: Initialize the new field
+  node->generated_id_for_llm[0] = '\0';
+
+  if (type == NODE_TYPE_DIRECTORY) {
+    node->children_capacity = 4;
+    node->children = (DirContextTreeNode **)malloc(
+        node->children_capacity * sizeof(DirContextTreeNode *));
+    if (node->children == NULL) {
+      perror("create_node: malloc failed for children array");
+      free(node);
+      return NULL;
+    }
+  }
+  return node;
+}
+
+bool add_child_to_parent_node(DirContextTreeNode *parent,
+                              DirContextTreeNode *child) {
+  if (parent == NULL || parent->type != NODE_TYPE_DIRECTORY || child == NULL) {
+    return false;
+  }
+
+  if (parent->num_children >= parent->children_capacity) {
+    uint32_t new_capacity =
+        (parent->children_capacity == 0) ? 4 : parent->children_capacity * 2;
+    DirContextTreeNode **new_children = (DirContextTreeNode **)realloc(
+        parent->children, new_capacity * sizeof(DirContextTreeNode *));
+    if (new_children == NULL) {
+      perror("add_child_to_parent_node: realloc failed");
+      return false;
+    }
+    parent->children = new_children;
+    parent->children_capacity = new_capacity;
+  }
+
+  parent->children[parent->num_children++] = child;
+  return true;
+}
+
+char *get_directory_basename(const char *path) {
+  if (path == NULL || path[0] == '\0') {
+    return strdup(".");
+  }
+
+  char temp_path[MAX_PATH_LEN];
+  safe_strncpy(temp_path, path, MAX_PATH_LEN);
+
+  size_t len = strlen(temp_path);
+  while (len > 0 && temp_path[len - 1] == PLATFORM_DIR_SEPARATOR) {
+    temp_path[--len] = '\0';
+  }
+
+  if (len == 0 && path[0] == PLATFORM_DIR_SEPARATOR) {
+    return strdup(PLATFORM_DIR_SEPARATOR_STR);
+  }
+  if (len == 0) {
+    return strdup(".");
+  }
+
+  const char *basename_ptr = platform_get_basename(temp_path);
+  if (basename_ptr == NULL) {
+    return strdup(".");
+  }
+  return strdup(basename_ptr);
+}
+
+void print_tree_recursive(const DirContextTreeNode *node, int indent_level) {
+  if (node == NULL)
+    return;
+
+  for (int i = 0; i < indent_level; ++i) {
+    printf("  ");
+  }
+
+  if (node->type == NODE_TYPE_DIRECTORY) {
+    printf("[%s/] (mod: %lld, children: %u, id_llm: %s)\n", // MODIFIED: Added
+                                                            // id_llm for debug
+           node->relative_path, (long long)node->last_modified_timestamp,
+           node->num_children,
+           node->generated_id_for_llm[0] == '\0' ? "(none)"
+                                                 : node->generated_id_for_llm);
+    for (uint32_t i = 0; i < node->num_children; ++i) {
+      print_tree_recursive(node->children[i], indent_level + 1);
+    }
+  } else { // NODE_TYPE_FILE
+    printf(
+        "%s (mod: %lld, offset: %llu, size: %llu, id_llm: %s)\n", // MODIFIED:
+                                                                  // Added
+                                                                  // id_llm for
+                                                                  // debug
+        node->relative_path, (long long)node->last_modified_timestamp,
+        (unsigned long long)node->content_offset_in_data_section,
+        (unsigned long long)node->content_size,
+        node->generated_id_for_llm[0] == '\0' ? "(none)"
+                                              : node->generated_id_for_llm);
+  }
+}
+</FILE_CONTENT_END ID="F019">
+
+<FILE_CONTENT_START ID="F020" PATH="src/main.c">
+#include <libgen.h> // For basename() to get target directory name for output file
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "datatypes.h"
+#include "dctx_reader.h" // Added
+#include "ignore.h"
+#include "llm_formatter.h" // Added
+#include "platform.h"
+#include "utils.h"
+#include "walker.h"
+#include "writer.h"
+
+// --- Constants ---
+#define APP_NAME "dircontxt"
+#define APP_VERSION "0.1.0"
+
+// --- Function Declarations ---
+static void print_usage(void);
+static bool determine_output_filepaths(const char *target_dir_abs_path,
+                                       char *dctx_output_filepath_out,
+                                       size_t dctx_buffer_size,
+                                       char *llm_output_filepath_out,
+                                       size_t llm_buffer_size);
+
+// --- Main Function ---
+int main(int argc, char *argv[]) {
+  log_info("%s v%s starting.", APP_NAME, APP_VERSION);
+
+  if (argc < 2 || argc > 2) {
+    if (argc == 2 &&
+        (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
+      print_usage();
+      return EXIT_SUCCESS;
+    }
+    if (argc == 2 &&
+        (strcmp(argv[1], "-v") == 0 || strcmp(argv[1], "--version") == 0)) {
+      return EXIT_SUCCESS;
+    }
+    print_usage();
+    return EXIT_FAILURE;
+  }
+
+  const char *target_dir_arg = argv[1];
+  char target_dir_abs_path[MAX_PATH_LEN];
+  char dctx_filepath[MAX_PATH_LEN];    // For the binary .dircontxt file
+  char llm_txt_filepath[MAX_PATH_LEN]; // For the .llmcontext.txt file
+
+  // 1. Resolve target directory to absolute path
+  if (!platform_resolve_path(target_dir_arg, target_dir_abs_path,
+                             MAX_PATH_LEN)) {
+    log_error("Failed to resolve target directory path: %s", target_dir_arg);
+    return EXIT_FAILURE;
+  }
+  log_info("Target directory resolved to: %s", target_dir_abs_path);
+
+  // 2. Determine output file paths (for both .dircontxt and .llmcontext.txt)
+  if (!determine_output_filepaths(target_dir_abs_path, dctx_filepath,
+                                  MAX_PATH_LEN, llm_txt_filepath,
+                                  MAX_PATH_LEN)) {
+    log_error("Failed to determine output filepaths.");
+    return EXIT_FAILURE;
+  }
+  log_info("Binary output file will be: %s", dctx_filepath);
+  log_info("LLM text output file will be: %s", llm_txt_filepath);
+
+  // 3. Load Ignore Rules
+  IgnoreRule *ignore_rules = NULL;
+  int ignore_rule_count = 0;
+  const char *dctx_filename_basename = platform_get_basename(dctx_filepath);
+  // const char* llm_filename_basename =
+  // platform_get_basename(llm_txt_filepath); // REMOVED/COMMENTED: Unused for
+  // now
+
+  if (!load_ignore_rules(target_dir_abs_path, dctx_filename_basename,
+                         &ignore_rules, &ignore_rule_count)) {
+    log_error("Failed to load ignore rules. Critical error.");
+    return EXIT_FAILURE;
+  }
+  log_info("Loaded %d ignore rules.", ignore_rule_count);
+
+  // 4. Walk Directory and Build Tree (for writing the binary .dircontxt)
+  int processed_items = 0;
+  DirContextTreeNode *tree_for_writing = walk_directory_and_build_tree(
+      target_dir_abs_path, ignore_rules, ignore_rule_count, &processed_items);
+
+  if (tree_for_writing == NULL) {
+    log_error("Failed to walk directory and build tree for: %s",
+              target_dir_abs_path);
+    free_ignore_rules_array(ignore_rules, ignore_rule_count);
+    return EXIT_FAILURE;
+  }
+  log_info(
+      "Directory tree built for binary writer. Root node relative path: '%s'",
+      tree_for_writing->relative_path);
+
+#if DEBUG_LOGGING_ENABLED
+  log_debug("--- In-memory Tree Structure (for writing) ---");
+  print_tree_recursive(tree_for_writing, 0);
+  log_debug("---------------------------------------------");
+#endif
+
+  // 5. Write .dircontxt Binary File
+  log_info("Writing to binary .dircontxt file: %s", dctx_filepath);
+  if (!write_dircontxt_file(dctx_filepath, tree_for_writing)) {
+    log_error("Failed to write .dircontxt binary file to: %s", dctx_filepath);
+    free_tree_recursive(tree_for_writing);
+    free_ignore_rules_array(ignore_rules, ignore_rule_count);
+    return EXIT_FAILURE;
+  }
+  log_info(
+      "Successfully created binary .dircontxt file: %s (%d items included).",
+      dctx_filepath, processed_items);
+
+  free_tree_recursive(tree_for_writing);
+  tree_for_writing = NULL;
+
+  log_info("Attempting to generate LLM context text file...");
+
+  DirContextTreeNode *tree_for_llm = NULL;
+  uint64_t data_section_offset = 0;
+
+  // 6. Read the .dircontxt binary file's header to reconstruct the tree for LLM
+  // formatting
+  if (!dctx_read_and_parse_header(dctx_filepath, &tree_for_llm,
+                                  &data_section_offset)) {
+    log_error("Failed to read and parse the created .dircontxt binary file "
+              "header from: %s",
+              dctx_filepath);
+    log_error("Cannot generate .llmcontext.txt file.");
+    free_ignore_rules_array(ignore_rules, ignore_rule_count);
+    return EXIT_FAILURE;
+  }
+  log_info(
+      ".dircontxt binary file header parsed successfully for LLM formatting.");
+
+#if DEBUG_LOGGING_ENABLED
+  log_debug("--- In-memory Tree Structure (read for LLM) ---");
+  print_tree_recursive(tree_for_llm, 0);
+  log_debug("----------------------------------------------");
+#endif
+
+  // 7. Generate the .llmcontext.txt file
+  if (!generate_llm_context_file(llm_txt_filepath, tree_for_llm, dctx_filepath,
+                                 data_section_offset)) {
+    log_error("Failed to generate .llmcontext.txt file at: %s",
+              llm_txt_filepath);
+  } else {
+    log_info("Successfully generated .llmcontext.txt file: %s",
+             llm_txt_filepath);
+  }
+
+  // 8. Final Cleanup
+  if (tree_for_llm != NULL) {
+    free_tree_recursive(tree_for_llm);
+  }
+  free_ignore_rules_array(ignore_rules, ignore_rule_count);
+
+  return EXIT_SUCCESS;
+}
+
+static void print_usage(void) {
+  printf("Usage: %s <target_directory>\n", APP_NAME);
+  printf("Creates a .dircontxt binary file and a .llmcontext.txt file\n");
+  printf("for the specified target directory.\n");
+  printf("Output files will be named <target_directory_name>.dircontxt and\n");
+  printf("<target_directory_name>.llmcontext.txt, placed in the parent "
+         "directory\n");
+  printf("of <target_directory>.\n\n");
+  printf("Options:\n");
+  printf("  -h, --help     Show this help message and exit.\n");
+  printf("  -v, --version  Show version information and exit.\n");
+}
+
+static bool determine_output_filepaths(const char *target_dir_abs_path,
+                                       char *dctx_output_filepath_out,
+                                       size_t dctx_buffer_size,
+                                       char *llm_output_filepath_out,
+                                       size_t llm_buffer_size) {
+  char dir_to_get_name_from[MAX_PATH_LEN];
+  safe_strncpy(dir_to_get_name_from, target_dir_abs_path, MAX_PATH_LEN);
+
+  char *target_basename = get_directory_basename(dir_to_get_name_from);
+  if (!target_basename) {
+    log_error("Failed to get basename for target directory: %s",
+              dir_to_get_name_from);
+    return false;
+  }
+
+  char dctx_filename[MAX_PATH_LEN];
+  snprintf(dctx_filename, MAX_PATH_LEN, "%s.dircontxt", target_basename);
+
+  char llm_filename[MAX_PATH_LEN];
+  snprintf(llm_filename, MAX_PATH_LEN, "%s.llmcontext.txt", target_basename);
+
+  free(target_basename);
+
+  char *parent_of_target_dir = platform_get_dirname(target_dir_abs_path);
+  if (!parent_of_target_dir) {
+    log_error("Failed to get parent directory of: %s", target_dir_abs_path);
+    return false;
+  }
+
+  bool success = true;
+  if (!platform_join_paths(parent_of_target_dir, dctx_filename,
+                           dctx_output_filepath_out, dctx_buffer_size)) {
+    log_error("Failed to join parent path '%s' and dctx filename '%s'",
+              parent_of_target_dir, dctx_filename);
+    success = false;
+  }
+  if (success &&
+      !platform_join_paths(parent_of_target_dir, llm_filename,
+                           llm_output_filepath_out, llm_buffer_size)) {
+    log_error("Failed to join parent path '%s' and llm filename '%s'",
+              parent_of_target_dir, llm_filename);
+    success = false;
+  }
+
+  free(parent_of_target_dir);
+  return success;
+}
+</FILE_CONTENT_END ID="F020">
+
+<FILE_CONTENT_START ID="F021" PATH="src/llm_formatter.h">
+#ifndef LLM_FORMATTER_H
+#define LLM_FORMATTER_H
+
+#include "datatypes.h" // For DirContextTreeNode
+#include <stdbool.h>
+
+// --- Core LLM Context File Generation Function ---
+
+// Generates an LLM-friendly text file from a parsed .dircontxt tree and its
+// binary file.
+//
+// Parameters:
+//   llm_txt_filepath: Path to the .llmcontext.txt file to be
+//   created/overwritten. root_node: Pointer to the root of the in-memory
+//   DirContextTreeNode tree (parsed from .dircontxt).
+//              This node (and its children) will be modified to store generated
+//              IDs.
+//   dctx_binary_filepath: Path to the original .dircontxt binary file (needed
+//   to read raw file contents). data_section_start_offset_in_dctx_file: The
+//   byte offset in the .dircontxt binary file
+//                                           where the actual file data section
+//                                           begins.
+//
+// Returns:
+//   True if the LLM context file was generated successfully, false otherwise.
+bool generate_llm_context_file(
+    const char *llm_txt_filepath,
+    DirContextTreeNode
+        *root_node, // MODIFIED: Changed from const DirContextTreeNode*
+    const char *dctx_binary_filepath,
+    uint64_t data_section_start_offset_in_dctx_file);
+
+#endif // LLM_FORMATTER_H
+</FILE_CONTENT_END ID="F021">
+
+<FILE_CONTENT_START ID="F022" PATH="src/writer.h">
+#ifndef WRITER_H
+#define WRITER_H
+
+#include "datatypes.h"
+#include <stdbool.h>
+#include <stdio.h> // For FILE* (though typically not in .h for opaque types, here for clarity)
+
+// --- Constants for the .dircontxt format ---
+// MODIFIED HERE: Signature is exactly 8 characters for content to match
+// DIRCONTXT_SIGNATURE_LEN
+#define DIRCONTXT_FILE_SIGNATURE "DIRCTXTV"
+#define DIRCONTXT_SIGNATURE_LEN 8
+
+// --- Core Writing Function ---
+
+// Writes the in-memory directory tree and file contents to a .dircontxt file.
+//
+// Parameters:
+//   output_filepath: The full path to the .dircontxt file to be
+//   created/overwritten. root_node: Pointer to the root of the in-memory
+//   DirContextTreeNode tree.
+//              This tree should have file node content_offset_in_data_section
+//              and content_size fields PRE-CALCULATED by a preliminary pass if
+//              they are not calculated during this write. (Our approach will
+//              calculate them during the write process).
+//
+// Returns:
+//   True if the file was written successfully, false otherwise.
+bool write_dircontxt_file(const char *output_filepath,
+                          DirContextTreeNode *root_node);
+
+#endif // WRITER_H
+</FILE_CONTENT_END ID="F022">
+
+<FILE_CONTENT_START ID="F023" PATH="src/platform.h">
+#ifndef PLATFORM_H
+#define PLATFORM_H
+
+#include <stdbool.h>  // For bool
+#include <stdint.h>   // For uint64_t
+#include <sys/stat.h> // For struct stat, S_ISDIR, S_ISREG
+#include <time.h>     // For time_t
+
+// We'll primarily be on POSIX-like systems (macOS, Linux) for now.
+// Windows-specific code would be guarded by #ifdef _WIN32 etc.
+
+// --- Filesystem Operations ---
+
+// Get file status (last modified time, type, etc.)
+// Returns 0 on success, -1 on error.
+// On POSIX, this will wrap stat().
+int platform_get_file_stat(const char *path, struct stat *stat_buf);
+
+// Check if a path is a directory from a stat buffer
+bool platform_is_dir(const struct stat *stat_buf);
+
+// Check if a path is a regular file from a stat buffer
+bool platform_is_reg_file(const struct stat *stat_buf);
+
+// Get last modified time as a Unix timestamp (seconds since epoch)
+uint64_t platform_get_mod_time(const struct stat *stat_buf);
+
+// Resolve a path to its absolute form.
+// `resolved_path` buffer should be at least MAX_PATH_LEN.
+// Returns true on success, false on failure.
+bool platform_resolve_path(const char *path, char *resolved_path_out,
+                           size_t out_buffer_size);
+
+// Get the base name of a path (e.g., "file.txt" from "/path/to/file.txt")
+// The returned pointer is to a part of the input string or a static buffer;
+// caller should copy if modification or long-term storage is needed.
+// For simplicity, we'll just use a basic version.
+const char *platform_get_basename(const char *path);
+
+// Get the directory name of a path (e.g. "/path/to" from "/path/to/file.txt")
+// The caller is responsible for freeing the returned string if it's dynamically
+// allocated. For POSIX, this might wrap dirname(). Note: dirname can modify its
+// input. For a safer approach, we'll implement a custom one or ensure proper
+// usage.
+char *platform_get_dirname(const char *path);
+
+// --- Path Manipulation ---
+
+// Join two path components with the correct separator.
+// `base_path` + `separator` + `component` -> `result_path`
+// `result_path_buffer` should be large enough.
+// Returns true on success, false on failure (e.g., buffer too small).
+bool platform_join_paths(const char *base_path, const char *component,
+                         char *result_path_buffer, size_t buffer_size);
+
+// Define the directory separator character for the current platform
+#ifdef _WIN32
+#define PLATFORM_DIR_SEPARATOR '\\'
+#define PLATFORM_DIR_SEPARATOR_STR "\\"
+#else
+#define PLATFORM_DIR_SEPARATOR '/'
+#define PLATFORM_DIR_SEPARATOR_STR "/"
+#endif
+
+#endif // PLATFORM_H
+</FILE_CONTENT_END ID="F023">
+
+[END_DIRCONTXT_LLM_SNAPSHOT]
+
