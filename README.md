@@ -1,19 +1,27 @@
-***
+Of course. The project is written in the **C programming language**, specifically following the **C11 standard**.
 
-# dircontxt Documentation
+I have updated the entire project documentation to reflect all the recent changes, including a comprehensive guide to the advanced ignore file system. This new `README.md` is a complete replacement for the previous documentation files.
 
-`dircontxt` is a command-line utility designed to capture a complete, self-contained snapshot of a directory's structure and contents. It produces two distinct output files: a compact binary archive and a detailed, AI-friendly text file, making it an ideal tool for project archiving, analysis, and interaction with Large Language Models (LLMs).
+---
 
-The tool is written in C for performance and portability, using a standard `Makefile` for easy compilation.
+### `README.md`
+
+```markdown
+# dircontxt: Directory Context Snapshot Tool
+
+**Language: C (C11 Standard)**
+
+`dircontxt` is a high-performance command-line utility written in C that captures a complete, self-contained snapshot of a directory's structure and contents. It produces two distinct output files: a compact binary archive for machine use and a detailed text file specifically formatted for Large Language Models (LLMs), making it an ideal tool for project archiving, analysis, and AI-driven code introspection.
 
 ## Features
 
+*   **High Performance**: Written in C for fast and efficient file processing.
 *   **Recursive Directory Scanning**: Captures the entire hierarchy of files and subdirectories.
-*   **Customizable Ignore Rules**: Uses a `.dircontxtignore` file, with a syntax similar to `.gitignore`, to exclude unnecessary files and folders (e.g., build artifacts, temporary files).
+*   **Advanced Ignore System**: Utilizes a powerful three-tiered ignore system (`default` -> `global` -> `project`) with a `.gitignore`-like syntax, including negation.
 *   **Dual-Output Format**:
-    1.  A compact **binary (`.dircontxt`)** format for efficient storage and machine-to-machine transfer.
-    2.  A verbose **text (`.llmcontext.txt`)** format specifically designed to be parsed and understood by AI models.
-*   **Binary File Detection**: Intelligently identifies binary files by extension and content analysis, replacing their content with a placeholder in the text output to maintain readability.
+    1.  A compact **binary (`.dircontxt`)** format for efficient storage.
+    2.  A verbose **text (`.llmcontext.txt`)** format designed to be easily parsed and understood by AI models.
+*   **Intelligent Binary Detection**: Identifies binary files and replaces their content with a placeholder in the text output to maintain readability.
 
 ---
 
@@ -21,59 +29,51 @@ The tool is written in C for performance and portability, using a standard `Make
 
 Follow these steps to compile the application and set up the `dctx` command to be accessible from anywhere in your terminal.
 
-### Step 1: Prerequisites
+### 1. Prerequisites
 
-Ensure you have the **Xcode Command Line Tools** installed, which include `git`, `make`, and the `clang` compiler. If you don't have them, run this command in your terminal:
-
+Ensure you have the **Xcode Command Line Tools** installed, which include `git`, `make`, and the `clang` compiler.
 ```bash
 xcode-select --install
 ```
 
-### Step 2: Clone and Compile the Project
+### 2. Clone and Compile the Project
 
-First, clone the project repository and compile the source code. The `release` target is recommended for general use as it creates an optimized executable.
+Clone the repository and use the provided `Makefile` to compile the project. The `release` target is recommended for general use.
 
 ```bash
-# Go to a directory where you keep your development projects
+# Navigate to a directory for your development projects
 cd ~/DEV
 
 # Clone the repository (replace with your actual repository URL)
 git clone https://github.com/your-username/dircontxt.git
 cd dircontxt
 
-# Compile the project for release
-make release
-```
+# Compile the project and create an optimized executable
+make release```
+This creates the final executable at `build/bin/dircontxt`.
 
-This will create the executable at `build/bin/dircontxt`.
-
-### Step 3: Create a Runner Script
+### 3. Set up the Global `dctx` Command
 
 To make the command globally available, we'll create a simple wrapper script.
 
-1.  **Get the absolute path** to the compiled executable. While inside the `dircontxt` project directory, run:
+1.  **Get the executable's absolute path.** While inside the project directory, run:
     ```bash
     echo "$(pwd)/build/bin/dircontxt"
     ```
-    Copy the output path. It should look something like `/Users/yourname/DEV/dircontxt/build/bin/dircontxt`.
+    Copy the full path that is printed (e.g., `/Users/yourname/DEV/dircontxt/build/bin/dircontxt`).
 
-2.  Create a standard directory for your personal scripts if you don't have one:
+2.  **Create a script file for the command:**
     ```bash
     mkdir -p ~/.local/bin
-    ```
-
-3.  Create the script file named `dctx`:
-    ```bash
     nano ~/.local/bin/dctx
     ```
 
-4.  Paste the following code into the nano editor. **Crucially, replace the placeholder path in `APP_PATH` with the one you copied in step 1.**
-
+3.  **Paste the following into the editor.** **Crucially, replace the placeholder in `APP_PATH` with the path you copied in the previous step.**
     ```sh
     #!/bin/zsh
 
     # --- CONFIGURATION ---
-    # IMPORTANT: Replace this path with the absolute path to YOUR executable.
+    # IMPORTANT: Replace this with the absolute path to YOUR executable.
     APP_PATH="/Users/yourname/DEV/dircontxt/build/bin/dircontxt"
 
     # --- SCRIPT LOGIC ---
@@ -84,166 +84,109 @@ To make the command globally available, we'll create a simple wrapper script.
       exit 1
     fi
 
-    # Use the first argument as the target directory, or default to the current directory ('.').
+    # Use the first argument as the target, or default to the current directory ('.').
     TARGET_DIR="${1:-.}"
 
     # Execute the application
     "$APP_PATH" "$TARGET_DIR"
     ```
+    Save and exit nano by pressing `Ctrl + X`, then `Y`, then `Enter`.
 
-5.  Save the file and exit nano by pressing `Ctrl + X`, then `Y`, then `Enter`.
+4.  **Make the script executable:**
+    ```bash
+    chmod +x ~/.local/bin/dctx
+    ```
 
-### Step 4: Make the Script Executable
-
-```bash
-chmod +x ~/.local/bin/dctx
-```
-
-### Step 5: Add the Script Directory to your Zsh PATH
-
-1.  Open your Zsh configuration file:
+5.  **Add the script's directory to your Zsh PATH.** Open your Zsh configuration file:
     ```bash
     nano ~/.zshrc
     ```
-
-2.  Add the following line to the end of the file. This tells your shell to look for commands in your personal scripts folder.
-
+    Add this line to the end of the file:
     ```sh
     # Add local bin directory for custom scripts
     export PATH="$HOME/.local/bin:$PATH"
     ```
+    Save and exit.
 
-3.  Save and exit (`Ctrl + X`, `Y`, `Enter`).
-
-### Step 6: Reload Your Shell Configuration
-
-Apply the changes to your current terminal session:
-
-```bash
-source ~/.zshrc
-```
-
-### Step 7: Verify the Installation
-
-You're all set! Verify that the command works by checking its version.
-
-```bash
-dctx -v
-# You should see: [INFO] dircontxt v0.1.0 starting.
-```
+6.  **Reload your shell configuration** to apply the changes:
+    ```bash
+    source ~/.zshrc
+    ```
+    Your `dctx` command is now ready to use from any directory.
 
 ---
 
 ## Usage Guide
 
-The `dctx` command is designed to be run from your terminal. It takes a single argument: the path to the directory you want to process.
-
-### Basic Syntax
-
+#### Basic Syntax
 ```bash
-dctx <path_to_directory>
+dctx [directory_path]
 ```
+*   `[directory_path]`: The path to the directory you wish to capture. If omitted, it defaults to the **current directory (`.`)**.
 
-### How to Use It
-
-The output files are always created in the **parent directory** of the target you specify. This prevents the output files from being included in subsequent runs on the same folder.
-
-#### Example 1: Running on the Current Directory
-
-This is the most common use case. Navigate to a project folder and run `dctx` on it.
-
-```bash
-# Navigate to a project you want to capture
-cd ~/DEV/my-web-app
-
-# Run the command on the current directory ('.')
-dctx .
-
-# Output will be created at ~/DEV/my-web-app.dircontxt
-# and ~/DEV/my-web-app.llmcontext.txt
-```
-
-#### Example 2: Running on a Different Directory
-
-You can run the command from anywhere by providing the path to the target directory.
-
-```bash
-# You are currently in your home directory
-pwd
-# /Users/yourname
-
-# Run the command on a project located elsewhere
-dctx ~/Documents/some_project
-
-# Output will be created at ~/Documents/some_project.dircontxt
-# and ~/Documents/some_project.llmcontext.txt
-```
-
-### Configuring Ignores with `.dircontxtignore`
-
-To exclude files and directories from the snapshot, create a file named `.dircontxtignore` in the root of the target directory. The syntax is similar to `.gitignore`.
-
-*   To ignore a directory, add its name followed by a slash: `node_modules/`
-*   To ignore files by extension, use a wildcard: `*.log`
-*   To ignore a specific file by name: `secret.key`
-*   To ignore a file in a specific directory: `config/credentials.json`
-
-**Example `.dircontxtignore` file:**
-
-```
-# Git directory
-.git/
-
-# Build artifacts
-build/
-dist/
-
-# Dependencies
-node_modules/
-
-# Log files
-*.log
-*.tmp
-
-# IDE / OS files
-.vscode/
-.idea/
-.DS_Store
-
-# Specific sensitive file
-credentials.env
-```
+#### Output Location
+The output files (`<dir_name>.dircontxt` and `<dir_name>.llmcontext.txt`) are always created in the **parent directory** of the target. This prevents the output files from being included in subsequent runs.
 
 ---
 
-## Understanding the Output Files
+## Configuring Ignore Rules
 
-For a target directory named `my-project`, `dctx` will generate two files:
+`dctx` uses a powerful three-tiered system to exclude files and directories from the snapshot.
 
-### 1. The Binary Archive: `my-project.dircontxt`
+#### The Hierarchy of Rules
 
-This is a compact, machine-readable archive containing the complete directory snapshot.
+Rules are loaded from three sources in order of increasing precedence (later rules override earlier ones):
 
-*   **Purpose**: It serves as the single source of truth for the directory's state at the time of capture. It is optimized for storage and programmatic access.
-*   **Structure**:
-    1.  **Signature**: A unique 8-byte header (`DIRCTXTV`) to identify the file type.
-    2.  **Header Section**: A serialized representation of the entire directory tree, including metadata for every file and folder (paths, timestamps, etc.).
-    3.  **Data Section**: The concatenated, raw contents of every file in the tree.
+1.  **Default (Built-in) Rules - Lowest Priority**:
+    The application has a hardcoded list of common patterns to ignore, including `.git/`, `node_modules/`, and `.DS_Store`. These are always active.
 
-This file is used by the `dctx` tool itself to generate the text-based LLM snapshot.
+2.  **Global Ignore File - Medium Priority**:
+    You can create a global ignore file at `~/.config/dircontxt/ignore`. Rules in this file apply to *every* project and override the defaults. This is perfect for editor configs or system files you always want to ignore.
 
-### 2. The LLM Snapshot: `my-project.llmcontext.txt`
+3.  **Project Ignore File (`.dircontxtignore`) - Highest Priority**:
+    A file named `.dircontxtignore` in the root of the directory you are capturing provides project-specific rules. These rules have the final say, overriding any conflicting global or default rules.
 
-This is a verbose, structured text file designed to be easily understood by an AI, like Gemini.
+#### Rule Precedence: The Last Match Wins
 
-*   **Purpose**: To provide a complete and easily parsable context of a software project to an AI for tasks like code review, documentation, debugging, or analysis.
-*   **Structure**:
-    *   `[DIRCONTXT_LLM_SNAPSHOT_V1.2]`: A version header.
-    *   `<INSTRUCTIONS>`: A short guide explaining how to read the file format.
-    *   `<DIRECTORY_TREE>`: A manifest of all files and directories. Each entry includes:
-        *   `[D]` for directory or `[F]` for file.
-        *   The relative path of the item.
-        *   A unique `ID` (e.g., `F001`, `D002`) used to link to its content.
-        *   The `MOD` (Unix modification timestamp) and `SIZE` (in bytes).
-    *   `<FILE_CONTENT_START ID="...">` and `</FILE_CONTENT_END>`: Blocks that contain the full content of each text file, linked by the ID from the directory tree.
-    *   **Binary Placeholders**: If a file is identified as binary, its content is replaced with a placeholder (e.g., `[BINARY CONTENT PLACEHOLDER - Size: 13072 bytes]`) to keep the snapshot clean and readable.
+The most important concept is that **the last rule that matches a file determines its fate.** This is how negation (`!`) works. If a file is ignored by a general rule but re-included by a later, more specific negation rule, it will be included in the final snapshot.
+
+#### Pattern Syntax Guide
+
+| Pattern Example         | Description                                                                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `# comments`            | Lines starting with `#` are ignored.                                                                                                     |
+| `build/`                | A name ending in a `/` matches **only directories** with that name, anywhere in the project.                                             |
+| `*.log`                 | A leading `*` acts as a suffix wildcard. This ignores any file or directory ending with `.log`.                                          |
+| `my-file.tmp`           | A simple name with no slashes matches any file or directory with that name anywhere in the tree.                                         |
+| `src/config.json`       | Patterns containing a `/` are matched against the full relative path from the project root. This only ignores `config.json` inside `src/`. |
+| `!important.log`        | A leading `!` **negates** the pattern. This re-includes a file that was previously matched by an ignore rule.                              |
+| `build/*`               | A wildcard at the end of a path ignores all files and folders *inside* the `build` directory, but not the directory itself.                |
+
+
+#### Example Configuration
+
+Imagine this `.dircontxtignore` file:
+```
+# Ignore all log files
+*.log
+
+# But re-include the important audit log
+!logs/audit.log
+
+# Ignore sensitive keys
+secret.key
+```
+*   `debug.log` would be **ignored**.
+*   `logs/audit.log` would be **included**, because the negation rule is the last one that matches it.
+*   `secret.key` would be **ignored**.
+
+---
+
+## Building from Source
+
+The project uses a standard `Makefile`. The most common targets are:
+*   `make` or `make all`: Compiles a debug version of the executable.
+*   `make release`: Cleans and compiles an optimized, stripped release executable.
+*   `make test` or `make run`: Compiles and runs a comprehensive test case to validate ignore logic.
+*   `make clean`: Removes all build artifacts and test outputs.
+```
