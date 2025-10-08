@@ -12,18 +12,22 @@
 // Parameters:
 //   llm_txt_filepath: Path to the .llmcontext.txt file to be
 //   created/overwritten. root_node: Pointer to the root of the in-memory
-//   DirContextTreeNode tree (parsed from .dircontxt). dctx_binary_filepath:
-//   Path to the original .dircontxt binary file (needed to read raw file
-//   contents). data_section_start_offset_in_dctx_file: The byte offset in the
-//   .dircontxt binary file
+//   DirContextTreeNode tree (parsed from .dircontxt).
+//              This node (and its children) will be modified to store generated
+//              IDs.
+//   dctx_binary_filepath: Path to the original .dircontxt binary file (needed
+//   to read raw file contents). data_section_start_offset_in_dctx_file: The
+//   byte offset in the .dircontxt binary file
 //                                           where the actual file data section
 //                                           begins.
 //
 // Returns:
 //   True if the LLM context file was generated successfully, false otherwise.
-bool generate_llm_context_file(const char *llm_txt_filepath,
-                               const DirContextTreeNode *root_node,
-                               const char *dctx_binary_filepath,
-                               uint64_t data_section_start_offset_in_dctx_file);
+bool generate_llm_context_file(
+    const char *llm_txt_filepath,
+    DirContextTreeNode
+        *root_node, // MODIFIED: Changed from const DirContextTreeNode*
+    const char *dctx_binary_filepath,
+    uint64_t data_section_start_offset_in_dctx_file);
 
 #endif // LLM_FORMATTER_H

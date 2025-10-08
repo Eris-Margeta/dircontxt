@@ -32,7 +32,7 @@ char *read_line_from_file(FILE *fp) {
   if (fp == NULL)
     return NULL;
 
-  size_t buffer_size = 128; // Initial buffer size
+  size_t buffer_size = 128;
   char *buffer = (char *)malloc(buffer_size);
   if (buffer == NULL) {
     perror("read_line_from_file: malloc failed for buffer");
@@ -43,8 +43,8 @@ char *read_line_from_file(FILE *fp) {
   int c;
 
   while ((c = fgetc(fp)) != EOF && c != '\n') {
-    if (current_pos >= buffer_size - 1) { // -1 for null terminator
-      buffer_size *= 2;                   // Double the buffer size
+    if (current_pos >= buffer_size - 1) {
+      buffer_size *= 2;
       char *new_buffer = (char *)realloc(buffer, buffer_size);
       if (new_buffer == NULL) {
         perror("read_line_from_file: realloc failed for buffer");
@@ -56,9 +56,9 @@ char *read_line_from_file(FILE *fp) {
     buffer[current_pos++] = (char)c;
   }
 
-  buffer[current_pos] = '\0'; // Null-terminate the string
+  buffer[current_pos] = '\0';
 
-  if (c == EOF && current_pos == 0) { // EOF and no characters read
+  if (c == EOF && current_pos == 0) {
     free(buffer);
     return NULL;
   }
@@ -67,10 +67,7 @@ char *read_line_from_file(FILE *fp) {
 }
 
 // --- Error Handling ---
-// Simple logging for now, can be expanded (e.g., to log to a file, different
-// levels)
-#ifndef NDEBUG // Only enable log_debug if not NDEBUG (NDEBUG is often defined
-               // for release builds)
+#ifndef NDEBUG
 #define DEBUG_LOGGING_ENABLED 1
 #else
 #define DEBUG_LOGGING_ENABLED 0
@@ -115,9 +112,9 @@ void free_tree_recursive(DirContextTreeNode *node) {
     for (uint32_t i = 0; i < node->num_children; ++i) {
       free_tree_recursive(node->children[i]);
     }
-    free(node->children); // Free the array of child pointers
+    free(node->children);
   }
-  free(node); // Free the node itself
+  free(node);
 }
 
 DirContextTreeNode *create_node(NodeType type,
@@ -132,27 +129,28 @@ DirContextTreeNode *create_node(NodeType type,
 
   node->type = type;
   safe_strncpy(node->relative_path, relative_path_in_archive, MAX_PATH_LEN);
-  safe_strncpy(node->disk_path, disk_path_for_stat,
-               MAX_PATH_LEN); // Store disk path for statting
+  safe_strncpy(node->disk_path, disk_path_for_stat, MAX_PATH_LEN);
 
   struct stat stat_buf;
   if (platform_get_file_stat(disk_path_for_stat, &stat_buf) == 0) {
     node->last_modified_timestamp = platform_get_mod_time(&stat_buf);
   } else {
     log_error("Failed to stat %s, setting timestamp to 0.", disk_path_for_stat);
-    node->last_modified_timestamp = 0; // Or handle error more gracefully
+    node->last_modified_timestamp = 0;
   }
 
-  node->content_offset_in_data_section = 0; // Will be set later for files
-  node->content_size = 0;                   // Will be set later for files
+  node->content_offset_in_data_section = 0;
+  node->content_size = 0;
 
   node->children = NULL;
   node->num_children = 0;
   node->children_capacity = 0;
 
+  // MODIFIED HERE: Initialize the new field
+  node->generated_id_for_llm[0] = '\0';
+
   if (type == NODE_TYPE_DIRECTORY) {
-    // Initialize children array with a small capacity for directories
-    node->children_capacity = 4; // Initial capacity
+    node->children_capacity = 4;
     node->children = (DirContextTreeNode **)malloc(
         node->children_capacity * sizeof(DirContextTreeNode *));
     if (node->children == NULL) {
@@ -177,8 +175,7 @@ bool add_child_to_parent_node(DirContextTreeNode *parent,
         parent->children, new_capacity * sizeof(DirContextTreeNode *));
     if (new_children == NULL) {
       perror("add_child_to_parent_node: realloc failed");
-      return false; // Child is not added, but also not lost if allocated
-                    // separately
+      return false;
     }
     parent->children = new_children;
     parent->children_capacity = new_capacity;
@@ -188,39 +185,31 @@ bool add_child_to_parent_node(DirContextTreeNode *parent,
   return true;
 }
 
-// Get the base name of a directory (e.g., "myfolder" from "/path/to/myfolder/"
-// or "/path/to/myfolder") The caller is responsible for freeing the returned
-// string.
 char *get_directory_basename(const char *path) {
   if (path == NULL || path[0] == '\0') {
-    return strdup("."); // Return "." for empty or NULL path
+    return strdup(".");
   }
 
   char temp_path[MAX_PATH_LEN];
   safe_strncpy(temp_path, path, MAX_PATH_LEN);
 
-  // Remove trailing slashes
   size_t len = strlen(temp_path);
   while (len > 0 && temp_path[len - 1] == PLATFORM_DIR_SEPARATOR) {
     temp_path[--len] = '\0';
   }
 
-  // If path was all slashes (e.g., "///"), temp_path is now empty. Return "/"
   if (len == 0 && path[0] == PLATFORM_DIR_SEPARATOR) {
     return strdup(PLATFORM_DIR_SEPARATOR_STR);
   }
-  // If path was empty or became empty (e.g. from ".")
   if (len == 0) {
     return strdup(".");
   }
 
   const char *basename_ptr = platform_get_basename(temp_path);
-  if (basename_ptr ==
-      NULL) { // Should not happen with our platform_get_basename
+  if (basename_ptr == NULL) {
     return strdup(".");
   }
-  return strdup(basename_ptr); // Make a copy as platform_get_basename might
-                               // point into temp_path
+  return strdup(basename_ptr);
 }
 
 void print_tree_recursive(const DirContextTreeNode *node, int indent_level) {
@@ -232,16 +221,25 @@ void print_tree_recursive(const DirContextTreeNode *node, int indent_level) {
   }
 
   if (node->type == NODE_TYPE_DIRECTORY) {
-    printf("[%s/] (mod: %llu, children: %u)\n", node->relative_path,
-           (unsigned long long)node->last_modified_timestamp,
-           node->num_children);
+    printf("[%s/] (mod: %lld, children: %u, id_llm: %s)\n", // MODIFIED: Added
+                                                            // id_llm for debug
+           node->relative_path, (long long)node->last_modified_timestamp,
+           node->num_children,
+           node->generated_id_for_llm[0] == '\0' ? "(none)"
+                                                 : node->generated_id_for_llm);
     for (uint32_t i = 0; i < node->num_children; ++i) {
       print_tree_recursive(node->children[i], indent_level + 1);
     }
   } else { // NODE_TYPE_FILE
-    printf("%s (mod: %llu, offset: %llu, size: %llu)\n", node->relative_path,
-           (unsigned long long)node->last_modified_timestamp,
-           (unsigned long long)node->content_offset_in_data_section,
-           (unsigned long long)node->content_size);
+    printf(
+        "%s (mod: %lld, offset: %llu, size: %llu, id_llm: %s)\n", // MODIFIED:
+                                                                  // Added
+                                                                  // id_llm for
+                                                                  // debug
+        node->relative_path, (long long)node->last_modified_timestamp,
+        (unsigned long long)node->content_offset_in_data_section,
+        (unsigned long long)node->content_size,
+        node->generated_id_for_llm[0] == '\0' ? "(none)"
+                                              : node->generated_id_for_llm);
   }
 }
