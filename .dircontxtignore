@@ -1,0 +1,27 @@
+# Dircontxt Ignore Rules
+# This file specifies files and directories to be excluded when creating a snapshot
+# of the 'dircontxt' project itself.
+
+# 1. Version Control System
+# Exclude the entire .git directory, which contains repository history and metadata.
+.git/
+
+# 2. Build Artifacts
+# Exclude the entire build directory, which contains compiled object files (.o)
+# and the final executable.
+build/
+
+# 3. Test Environment
+# Exclude the temporary directory created by the 'make test' or 'make run' command.
+test_dir/
+
+# 4. Dircontxt Output Files
+# Exclude any snapshot files that might be present in the directory from previous runs.
+*.dircontxt
+*.llmcontext.txt
+
+# 5. Common OS and IDE Metadata
+# Exclude system-specific or editor-specific configuration files.
+.DS_Store
+.vscode/
+.idea/

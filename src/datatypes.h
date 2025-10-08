@@ -18,20 +18,33 @@
 // Forward declaration for the tree node structure
 struct DirContextTreeNode;
 
+// **************************************************************************
+// FIX: Added the missing definition for NodeType.
+// This must be defined before it is used inside DirContextTreeNode.
 typedef enum { NODE_TYPE_FILE, NODE_TYPE_DIRECTORY } NodeType;
+// **************************************************************************
 
-// Structure for ignore rules parsed from .dircontxtignore
+// Enum to define the type of pattern match for an ignore rule.
+typedef enum {
+  PATTERN_TYPE_INVALID,
+  PATTERN_TYPE_BASENAME, // Matches only the file/dir name (e.g.,
+                         // "node_modules")
+  PATTERN_TYPE_PATH,     // Matches the full relative path (e.g., "src/main.c")
+  PATTERN_TYPE_SUFFIX,   // Matches a suffix wildcard (e.g., "*.log")
+  PATTERN_TYPE_PREFIX,   // Matches a prefix wildcard (e.g., "build/*")
+} PatternType;
+
+// The IgnoreRule struct is now more descriptive.
 typedef struct {
   char pattern[MAX_PATH_LEN];
+  PatternType type;
   bool is_dir_only;
-  bool is_wildcard_prefix_match;
-  bool is_wildcard_suffix_match;
-  bool is_exact_name_match;
+  bool is_negation; // Set to true if the pattern starts with '!'
 } IgnoreRule;
 
 // Structure for representing a file or directory in our in-memory tree
 typedef struct DirContextTreeNode {
-  NodeType type;
+  NodeType type; // This line now works correctly.
   char relative_path[MAX_PATH_LEN];
   uint64_t last_modified_timestamp;
 
