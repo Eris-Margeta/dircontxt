@@ -31,6 +31,7 @@ static bool walk_recursive_helper(
             current_parent_disk_path, current_parent_node->relative_path);
 
   struct dirent *entry;
+  errno = 0; // Reset errno before starting loop
   while ((entry = readdir(dir_stream)) != NULL) {
     const char *entry_name = entry->d_name;
 
@@ -51,8 +52,6 @@ static bool walk_recursive_helper(
     if (strlen(current_parent_node->relative_path) == 0 ||
         (strlen(current_parent_node->relative_path) == 1 &&
          current_parent_node->relative_path[0] == '.')) {
-      // If parent is the root ("" or "."), child's relative path is just its
-      // name
       safe_strncpy(child_relative_path_in_archive, entry_name, MAX_PATH_LEN);
     } else {
       if (!platform_join_paths(current_parent_node->relative_path, entry_name,
@@ -136,9 +135,7 @@ static bool walk_recursive_helper(
     }
   } // end while readdir
 
-  if (errno != 0 &&
-      dir_stream !=
-          NULL) { // Check for readdir errors if loop terminated unexpectedly
+  if (errno != 0) { // Check if readdir loop terminated due to an error
     log_error("Error reading directory %s: %s", current_parent_disk_path,
               strerror(errno));
   }
@@ -172,11 +169,7 @@ DirContextTreeNode *walk_directory_and_build_tree(
   }
 
   // The root node's relative path in the archive is effectively "." or empty
-  // string, representing the base of the walked directory. For consistency,
-  // let's use an empty string for the root's relative_path if it's the true
-  // root. Or, if `dircontxt .` is run, the `target_dir_path_on_disk` name
-  // itself could be the root in some contexts, but our archive format implies
-  // relative paths from the walked root.
+  // string, representing the base of the walked directory.
   DirContextTreeNode *root_node =
       create_node(NODE_TYPE_DIRECTORY, "", target_dir_path_on_disk);
   if (root_node == NULL) {
@@ -185,9 +178,6 @@ DirContextTreeNode *walk_directory_and_build_tree(
     return NULL;
   }
 
-  // For the root node itself, count it if processed_item_count_out is provided
-  // (assuming the root directory itself isn't ignored by a specific rule, which
-  // is unlikely here)
   if (processed_item_count_out) {
     (*processed_item_count_out)++;
   }
@@ -197,8 +187,6 @@ DirContextTreeNode *walk_directory_and_build_tree(
   if (!walk_recursive_helper(root_node, target_dir_path_on_disk,
                              target_dir_path_on_disk, ignore_rules,
                              ignore_rule_count, processed_item_count_out)) {
-    // If the helper returns false, it means opendir failed on the root, which
-    // is critical.
     log_error("Initial directory walk failed for %s.", target_dir_path_on_disk);
     free_tree_recursive(root_node);
     return NULL;
