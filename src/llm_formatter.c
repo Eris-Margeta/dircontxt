@@ -275,11 +275,11 @@ static bool is_likely_binary(const char *buffer, size_t size,
                              const char *path_for_ext_check) {
   // --- Check 1: By file extension ---
   const char *binary_exts[] = {
-      ".png", ".jpg",   ".jpeg", ".gif", ".bmp",    ".ico", ".tiff", ".mp3",
-      ".wav", ".flac",  ".ogg",  ".mp4", ".mov",    ".avi", ".mkv",  ".pdf",
-      ".zip", ".gz",    ".tar",  ".rar", ".7z",     ".bz2", ".exe",  ".dll",
-      ".so",  ".dylib", ".o",    ".a",   ".lib",    ".bin", ".dat",  ".iso",
-      ".img", ".class", ".jar",  ".pyc", ".sqlite", ".db"};
+      ".png", ".svg", ".jpg",   ".jpeg", ".gif", ".bmp",    ".ico", ".tiff",
+      ".mp3", ".wav", ".flac",  ".ogg",  ".mp4", ".mov",    ".avi", ".mkv",
+      ".pdf", ".zip", ".gz",    ".tar",  ".rar", ".7z",     ".bz2", ".exe",
+      ".dll", ".so",  ".dylib", ".o",    ".a",   ".lib",    ".bin", ".dat",
+      ".iso", ".img", ".class", ".jar",  ".pyc", ".sqlite", ".db"};
   const char *ext = strrchr(path_for_ext_check, '.');
   if (ext) {
     for (size_t i = 0; i < sizeof(binary_exts) / sizeof(binary_exts[0]); ++i) {
