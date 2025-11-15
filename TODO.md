@@ -1,7 +1,3 @@
-Excellent. This is a perfect next step for making the tool more powerful and user-friendly. Here is the TODO list for the task, followed by a detailed prompt you can provide to an LLM like Gemini to implement the changes.
-
-***
-
 ## TODO: Implement Advanced Ignore File Handling
 
 This task focuses on upgrading the `dircontxt` ignore system to be more robust, automatic, and feature-rich, closely mirroring the functionality of Git's `.gitignore`.

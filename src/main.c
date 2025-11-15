@@ -61,39 +61,40 @@ int main(int argc, char *argv[]) {
   char old_version[32] = {0};
   char new_version[32] = {0};
   DirContextTreeNode *old_tree = NULL;
-  uint64_t old_data_offset = 0;
 
-  // Temporarily determine the llm_txt_filepath to check for its existence
   determine_output_filepaths(target_dir_abs_path, dctx_filepath, MAX_PATH_LEN,
                              llm_txt_filepath, MAX_PATH_LEN, diff_filepath,
                              MAX_PATH_LEN, "");
 
   if (file_exists(llm_txt_filepath) && file_exists(dctx_filepath)) {
-    log_info("Existing context file found. Running in update/diff mode.");
+    log_info("Existing context and binary files found. Running in update/diff "
+             "mode.");
     if (!parse_version_from_file(llm_txt_filepath, old_version,
                                  sizeof(old_version))) {
-      log_error(
-          "Could not parse version from existing file. Starting over with V1.");
+      log_error("Could not parse version. Starting over with V1.");
       safe_strncpy(old_version, "V1", sizeof(old_version));
     }
     calculate_next_version(old_version, new_version, sizeof(new_version));
 
     log_info("Loading previous state from %s", dctx_filepath);
+    uint64_t old_data_offset;
     if (!dctx_read_and_parse_header(dctx_filepath, &old_tree,
                                     &old_data_offset)) {
-      log_error("Failed to read header of previous binary file. Old state will "
-                "be ignored.");
+      log_error("Failed to read previous binary file. Old state ignored.");
       old_tree = NULL;
     }
-
   } else {
-    log_info("No existing context file found. Creating initial V1 snapshot.");
-    safe_strncpy(old_version, "V1", sizeof(old_version));
+    if (file_exists(llm_txt_filepath) && !file_exists(dctx_filepath)) {
+      log_info("Warning: Text file found but required binary archive is "
+               "missing. Cannot perform diff.");
+    }
+    log_info("Creating new V1 snapshot.");
     safe_strncpy(new_version, "V1", sizeof(new_version));
+    safe_strncpy(old_version, "V1", sizeof(old_version));
   }
+
   log_info("Current context version will be: %s", new_version);
 
-  // Finalize all output paths now that we have the new version string
   determine_output_filepaths(target_dir_abs_path, dctx_filepath, MAX_PATH_LEN,
                              llm_txt_filepath, MAX_PATH_LEN, diff_filepath,
                              MAX_PATH_LEN, new_version);
@@ -104,7 +105,7 @@ int main(int argc, char *argv[]) {
   if (!load_ignore_rules(target_dir_abs_path,
                          platform_get_basename(dctx_filepath), &ignore_rules,
                          &ignore_rule_count)) {
-    log_error("Failed to load ignore rules. Critical error.");
+    log_error("Failed to load ignore rules.");
     if (old_tree)
       free_tree_recursive(old_tree);
     return EXIT_FAILURE;
@@ -120,23 +121,19 @@ int main(int argc, char *argv[]) {
     free_ignore_rules_array(ignore_rules, ignore_rule_count);
     return EXIT_FAILURE;
   }
+  log_info("Directory walk completed. Processed %d items (files/dirs).",
+           processed_items);
 
-  // --- 4. Generate Binary and Diff (as needed) ---
+  // --- 4. Overwrite Binary and Generate Diff ---
   int exit_code = EXIT_SUCCESS;
-  bool binary_written_successfully = false;
 
-  // The binary file is a necessary prerequisite for text and diff generation.
-  // We will always write it first if text or diff output is desired.
   log_info("Writing binary archive to: %s", dctx_filepath);
-  if (write_dircontxt_file(dctx_filepath, new_tree)) {
-    binary_written_successfully = true;
-  } else {
+  if (!write_dircontxt_file(dctx_filepath, new_tree)) {
     log_error("Failed to write the .dircontxt binary file. Cannot proceed.");
     exit_code = EXIT_FAILURE;
     goto cleanup;
   }
 
-  // Generate diff if we had an old state to compare against.
   if (old_tree != NULL) {
     log_info("Comparing new state to previous state...");
     DiffReport *report = compare_trees(old_tree, new_tree);
@@ -144,8 +141,6 @@ int main(int argc, char *argv[]) {
       log_info("Changes detected. Generating diff file: %s", diff_filepath);
       uint64_t new_data_offset = 0;
       DirContextTreeNode *temp_tree_for_diff = NULL;
-      // We read the binary back to get correct data offsets for the content
-      // reader
       if (dctx_read_and_parse_header(dctx_filepath, &temp_tree_for_diff,
                                      &new_data_offset)) {
         generate_diff_file(diff_filepath, report, temp_tree_for_diff,
@@ -159,9 +154,15 @@ int main(int argc, char *argv[]) {
     free_diff_report(report);
   }
 
-  // --- 5. Generate Final Text Output ---
-  if (config.output_mode == OUTPUT_MODE_BOTH ||
-      config.output_mode == OUTPUT_MODE_TEXT_ONLY) {
+  // --- 5. Generate Text Output based on Config ---
+  if (config.output_mode == OUTPUT_MODE_BINARY_ONLY) {
+    log_info("Skipping text file generation as per binary-only mode.");
+    // Clean up old text/diff files if they exist
+    if (file_exists(llm_txt_filepath))
+      remove(llm_txt_filepath);
+    if (file_exists(diff_filepath))
+      remove(diff_filepath);
+  } else { // This covers BOTH and TEXT_ONLY modes
     log_info("Generating LLM context file: %s", llm_txt_filepath);
     uint64_t final_data_offset = 0;
     DirContextTreeNode *final_tree_for_llm = NULL;
@@ -181,24 +182,8 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // --- 6. Cleanup based on Output Mode ---
-  if (config.output_mode == OUTPUT_MODE_TEXT_ONLY &&
-      binary_written_successfully) {
-    remove(dctx_filepath);
-    log_info("Removed intermediate binary file as per text-only mode.");
-  }
-
-  // This is a safety check. If user only wants binary, we should not create the
-  // text file.
-  if (config.output_mode == OUTPUT_MODE_BINARY_ONLY) {
-    if (file_exists(llm_txt_filepath))
-      remove(llm_txt_filepath);
-    if (file_exists(diff_filepath))
-      remove(diff_filepath);
-  }
-
 cleanup:
-  // --- 7. Final Memory Free ---
+  // --- 6. Final Memory Free ---
   if (old_tree)
     free_tree_recursive(old_tree);
   if (new_tree)
@@ -219,6 +204,8 @@ static void print_usage(void) {
 }
 
 static bool file_exists(const char *filepath) {
+  if (filepath == NULL || filepath[0] == '\0')
+    return false;
   struct stat buffer;
   return (stat(filepath, &buffer) == 0);
 }
@@ -238,7 +225,6 @@ static bool determine_output_filepaths(
     return false;
   }
 
-  // Standard output files
   char dctx_filename[MAX_PATH_LEN];
   snprintf(dctx_filename, MAX_PATH_LEN, "%s.dircontxt", target_basename);
   platform_join_paths(parent_dir, dctx_filename, dctx_output_filepath_out,
@@ -249,7 +235,7 @@ static bool determine_output_filepaths(
   platform_join_paths(parent_dir, llm_filename, llm_output_filepath_out,
                       llm_buffer_size);
 
-  // Diff file (only if version string indicates an update, e.g., "V1.1")
+  // Diff file is only created for an update (e.g., "V1.1", "V1.2", etc.)
   if (version_string != NULL && strchr(version_string, '.') != NULL) {
     char diff_filename[MAX_PATH_LEN];
     snprintf(diff_filename, MAX_PATH_LEN, "%s.llmcontext-%s-diff.txt",
