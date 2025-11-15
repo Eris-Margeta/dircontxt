@@ -21,7 +21,8 @@ static bool write_file_content_block(FILE *fp,
                                      const DirContextTreeNode *file_node,
                                      FILE *dctx_binary_fp,
                                      uint64_t data_section_offset);
-static bool is_likely_binary(const char *buffer, size_t size);
+static bool is_likely_binary(const char *buffer, size_t size,
+                             const char *path_for_ext_check);
 static bool write_all_file_content_blocks_recursive(
     FILE *fp, const DirContextTreeNode *node, FILE *dctx_binary_fp,
     uint64_t data_section_offset);
@@ -31,11 +32,11 @@ find_node_by_path_recursive(DirContextTreeNode *node,
 
 // --- Public Function Implementations ---
 
-bool generate_llm_context_file(
-    const char *llm_txt_filepath, DirContextTreeNode *root_node,
-    const char *dctx_binary_filepath,
-    uint64_t data_section_start_offset_in_dctx_file,
-    const char *version_string) { // MODIFIED: New parameter
+bool generate_llm_context_file(const char *llm_txt_filepath,
+                               DirContextTreeNode *root_node,
+                               const char *dctx_binary_filepath,
+                               uint64_t data_section_start_offset_in_dctx_file,
+                               const char *version_string) {
   if (llm_txt_filepath == NULL || root_node == NULL ||
       dctx_binary_filepath == NULL || version_string == NULL) {
     log_error("llm_formatter: Invalid arguments for generating context file.");
@@ -217,10 +218,8 @@ static void write_manifest_entry_recursive(FILE *fp, DirContextTreeNode *node,
             node->generated_id_for_llm,
             (long long)node->last_modified_timestamp,
             (long long)node->content_size);
-    // ... binary hint logic ...
-    const char *ext = strrchr(node->relative_path, '.');
-    if (ext &&
-        is_likely_binary(NULL, 0)) { // Simplified call to check binary ext
+
+    if (is_likely_binary(NULL, 0, node->relative_path)) {
       fprintf(fp, ", CONTENT:BINARY_HINT");
     }
     fprintf(fp, ")\n");
@@ -255,7 +254,8 @@ static bool write_file_content_block(FILE *fp,
             fp,
             "[ERROR: Could not read file content from .dircontxt binary]\n");
       } else {
-        if (is_likely_binary(content_buffer, file_node->content_size)) {
+        if (is_likely_binary(content_buffer, file_node->content_size,
+                             file_node->relative_path)) {
           fprintf(fp, "[BINARY CONTENT PLACEHOLDER - Size: %llu bytes]\n",
                   (unsigned long long)file_node->content_size);
         } else {
@@ -271,25 +271,35 @@ static bool write_file_content_block(FILE *fp,
   return true;
 }
 
-static bool is_likely_binary(const char *buffer, size_t size) {
-  // Check by extension first (buffer can be NULL for this check)
-  const char *binary_exts[] = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".pdf",
-                               ".zip", ".gz",  ".exe",  ".dll", ".so",  ".o",
-                               ".a",   ".bin", ".dat",  ".iso"};
-  if (buffer == NULL &&
-      size == 0) { // Special case for extension check in manifest
-    // This is a placeholder for the logic to get path from node
-    // In a real scenario, we'd pass the path here.
-    // For now, we'll just return false to avoid complex changes.
-    return false;
+static bool is_likely_binary(const char *buffer, size_t size,
+                             const char *path_for_ext_check) {
+  // --- Check 1: By file extension ---
+  const char *binary_exts[] = {
+      ".png", ".jpg",   ".jpeg", ".gif", ".bmp",    ".ico", ".tiff", ".mp3",
+      ".wav", ".flac",  ".ogg",  ".mp4", ".mov",    ".avi", ".mkv",  ".pdf",
+      ".zip", ".gz",    ".tar",  ".rar", ".7z",     ".bz2", ".exe",  ".dll",
+      ".so",  ".dylib", ".o",    ".a",   ".lib",    ".bin", ".dat",  ".iso",
+      ".img", ".class", ".jar",  ".pyc", ".sqlite", ".db"};
+  const char *ext = strrchr(path_for_ext_check, '.');
+  if (ext) {
+    for (size_t i = 0; i < sizeof(binary_exts) / sizeof(binary_exts[0]); ++i) {
+      if (strcasecmp(ext, binary_exts[i]) == 0) {
+        return true;
+      }
+    }
   }
 
-  // Check by content
-  if (size == 0)
-    return false;
-  if (memchr(buffer, '\0', size) != NULL)
-    return true; // Contains null bytes
+  // --- Check 2: By content (if buffer is provided) ---
+  if (buffer == NULL || size == 0) {
+    return false; // Cannot check content, rely on extension check result
+  }
 
+  // Contains null bytes (a strong indicator)
+  if (memchr(buffer, '\0', size) != NULL) {
+    return true;
+  }
+
+  // High percentage of non-printable ASCII characters
   int non_printable = 0;
   size_t check_len = size < 512 ? size : 512;
   for (size_t i = 0; i < check_len; i++) {
@@ -298,7 +308,11 @@ static bool is_likely_binary(const char *buffer, size_t size) {
       non_printable++;
     }
   }
-  return (double)non_printable / check_len > 0.2; // Over 20% non-printable
+  if (check_len > 0 && (double)non_printable / check_len > 0.2) { // Over 20%
+    return true;
+  }
+
+  return false;
 }
 
 static bool write_all_file_content_blocks_recursive(
@@ -317,7 +331,6 @@ static bool write_all_file_content_blocks_recursive(
   return true;
 }
 
-// Helper to find a node by its full relative path.
 static DirContextTreeNode *
 find_node_by_path_recursive(DirContextTreeNode *node,
                             const char *relative_path) {
@@ -330,7 +343,6 @@ find_node_by_path_recursive(DirContextTreeNode *node,
 
   if (node->type == NODE_TYPE_DIRECTORY) {
     for (uint32_t i = 0; i < node->num_children; ++i) {
-      // Check if the target path starts with the child's path
       if (strncmp(relative_path, node->children[i]->relative_path,
                   strlen(node->children[i]->relative_path)) == 0) {
         DirContextTreeNode *found =
