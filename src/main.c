@@ -121,8 +121,7 @@ int main(int argc, char *argv[]) {
     free_ignore_rules_array(ignore_rules, ignore_rule_count);
     return EXIT_FAILURE;
   }
-  log_info("Directory walk completed. Processed %d items (files/dirs).",
-           processed_items);
+  // NOTE: The log message for walk completion is now only in walker.c
 
   // --- 4. Overwrite Binary and Generate Diff ---
   int exit_code = EXIT_SUCCESS;
@@ -157,7 +156,6 @@ int main(int argc, char *argv[]) {
   // --- 5. Generate Text Output based on Config ---
   if (config.output_mode == OUTPUT_MODE_BINARY_ONLY) {
     log_info("Skipping text file generation as per binary-only mode.");
-    // Clean up old text/diff files if they exist
     if (file_exists(llm_txt_filepath))
       remove(llm_txt_filepath);
     if (file_exists(diff_filepath))

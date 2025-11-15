@@ -1,5 +1,6 @@
 ## TODO: Implement Advanced Ignore File Handling
 
+Test 3
 This task focuses on upgrading the `dircontxt` ignore system to be more robust, automatic, and feature-rich, closely mirroring the functionality of Git's `.gitignore`.
 
 ### Phase 1: Design and Scoping
