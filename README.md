@@ -1,196 +1,254 @@
-Of course. After a detailed review of the project files and my previous analysis, I have refined and expanded the documentation to be more comprehensive, accurate, and actionable.
+```markdown
+# dircontxt Documentation
 
-My initial assessment was correct:
-*   The file `src_py/config_models.py` is indeed redundant and should be removed to avoid confusion. The project correctly uses the modular models within the `src_py/config_models/` directory.
-*   The workflow, technology stack, and roles of the different directories were accurately described.
+`dircontxt` is a command-line utility designed to capture a complete, self-contained snapshot of a directory's structure and contents. It produces two distinct output files: a compact binary archive and a detailed, AI-friendly text file, making it an ideal tool for project archiving, analysis, and interaction with Large Language Models (LLMs).
 
-I have expanded the following sections for greater clarity and practical use:
-*   **Configuration Guide**: Added detailed tables explaining every key in `site_config.yaml` and the page-specific YAML files.
-*   **Customization Guide**: Included a new, crucial section that provides a step-by-step guide for developers on how to add new pages and, more importantly, new reusable content sections.
-*   **Usage Guide**: Clarified the parameters for the `just run` command.
+The tool is written in C for performance and portability, using a standard `Makefile` for easy compilation.
 
-Here is the final, comprehensive documentation for your project.
+## Features
+
+*   **Recursive Directory Scanning**: Captures the entire hierarchy of files and subdirectories.
+*   **Advanced Ignore Rules**: Uses a powerful three-tiered system (default, global, and project-specific `.dircontxtignore`) with a syntax similar to `.gitignore` to exclude unnecessary files.
+*   **Dual-Output Format**:
+    1.  A compact **binary (`.dircontxt`)** format for efficient storage.
+    2.  A verbose **text (`.llmcontext.txt`)** format specifically designed for AI models.
+*   **Binary File Detection**: Intelligently identifies binary files and replaces their content with a placeholder in the text output to maintain readability.
 
 ---
 
-# Project Documentation: Python & Astro Static Site Generator
+## Installation (macOS)
 
-## 1. Project Overview
+Follow these steps to compile the application and set up the `dctx` command to be accessible from anywhere in your terminal.
 
-This project is a sophisticated **Static Site Generator (SSG)** framework. Its primary purpose is to take structured content defined in human-readable YAML files, process it using a powerful Python backend, and generate a complete, high-performance, and SEO-friendly website using the [Astro.js](https://astro.build/) framework.
+### Step 1: Prerequisites
 
-The core philosophy is the **separation of concerns**:
-*   **Content**: Managed exclusively in simple YAML files.
-*   **Logic & Structure**: Defined and validated by the Python backend.
-*   **Presentation**: Handled by Astro components and templates.
+Ensure you have the **Xcode Command Line Tools** installed, which include `git`, `make`, and the `clang` compiler. If you don't have them, run this command in your terminal:
 
-This architecture makes it incredibly efficient for developers to manage the site's structure and for non-technical users to update content without ever touching code.
-
-## 2. Technologies Used
-
-The project integrates a modern stack of tools, each chosen for a specific purpose.
-
-| Technology | Purpose in this Project |
-| :--- | :--- |
-| **Python** | The **core engine** of the generator. It orchestrates the entire process: reading configuration, validating data against predefined models, preparing data for templating, and running the final build commands. |
-| **YAML** | The **content format**. Used for all site configuration (`site_config.yaml`) and page content (`config/pages/*.yaml`) because it is easy for humans to read and write. |
-| **Pydantic** | The **data validation layer**. It acts as a schema for all YAML files. By defining strict data models in Python, we guarantee that the configuration is always correct, preventing errors before they reach the templating stage. |
-| **Jinja2** | The **templating engine**. It allows us to dynamically generate Astro source files (`.astro`, `.mjs`, etc.) by inserting the data processed by Python into predefined templates (`.j2` files). |
-| **Astro** | The **frontend framework**. The final output of the Python generator is a complete Astro project. Astro is used for its excellent performance (shipping zero JavaScript by default) and its component-based architecture. |
-| **Docker** | The **runtime environment**. Docker creates a consistent, isolated, and reproducible Linux container with all the necessary dependencies (a specific version of Python, Node.js, pnpm, etc.) pre-installed. This solves the "it works on my machine" problem and ensures the build process is identical everywhere. |
-| **Just (`justfile`)**| The **command runner**. `just` provides a simple and clean way to run complex project commands. It acts as a user-friendly interface for building the Docker image, running the generator, and starting a local development server. |
-| **pnpm** | The **Node.js package manager**. It is used within the Docker container and on the local machine to install Astro's dependencies efficiently. |
-
-## 3. How It Works: The Generation Pipeline
-
-The entire process is orchestrated by `src_py/generator/main.py`. Here is a step-by-step breakdown:
-
-1.  **Configuration Loading**: The `config_loader.py` module reads the global `config/site_config.yaml` and all page configurations from `config/pages/`.
-2.  **Data Validation**: As YAML is loaded, it is parsed and validated against the Pydantic models in `src_py/config_models/`. If any file is malformed, the process fails with a clear error.
-3.  **Data Preparation**: `data_preparer.py` transforms the validated data into a "Jinja Context" – a dictionary accessible to the templates. This involves resolving SEO fallbacks, generating JSON-LD schemas, and structuring content for easy rendering.
-4.  **Templating & Code Generation**: `templating.py` uses Jinja2 to render all `.j2` templates from `templates_astro/` into a new `astro_src/` directory, injecting the context data to create complete `.astro`, `.mjs`, and `.json` files.
-5.  **Astro Build**: `build_utils.py` runs `pnpm install` and `pnpm run build` inside the generated `astro_src/` directory.
-6.  **Final Output**: Astro compiles the site into static HTML/CSS/JS in a `dist/` folder. This folder's contents are then copied to the final `/output` directory.
-
-## 4. Directory Structure and File Interconnection
-
-#### `config/` - The Content Hub
-*   `site_config.yaml`: The "brain" of the website. Defines global settings.
-*   `pages/*.yaml`: The "body" of the website. Each file represents a single page.
-
-#### `src_py/` - The Python Engine
-*   **`config_models/`**: The **Schema/Blueprint**. These Pydantic models define the required structure for all YAML files.
-*   **`generator/`**: The **Engine Room**.
-    *   `main.py`: **Orchestrator** that runs the generation pipeline.
-    *   `config_loader.py`: **Importer** for YAML files.
-    *   `data_preparer.py`: **Processor** that creates the Jinja2 context.
-    *   `templating.py`: **Renderer** that generates Astro code from templates.
-    *   `build_utils.py`, `path_utils.py`: **Utilities** for running commands and determining paths.
-
-#### `templates_astro/` - The Molds
-This directory is a complete but *templated* Astro project. Its structure directly mirrors the final generated Astro source code. Jinja2 placeholders (`{{ ... }}`) are used to inject data.
-
-#### `scripts/` - Developer Tools
-*   `validate_configs.py`: A **Quality Assurance Tool** to quickly check all YAML files for errors without running a full build.
-*   `validators/*.py`: **Specialized Inspectors** that handle specific validation tasks like checking for broken links or missing image assets.
-
-#### Root Files
-*   `Dockerfile`: The **Environment Recipe** defining the consistent Docker build environment.
-*   `justfile`: The **Control Panel** for running common development and build commands.
-
-## 5. Usage Guide
-
-All primary interactions with the project are handled via the `justfile`.
-
-#### 1. Validate Your Configuration
-Before generating the site, always check your configuration for errors.
 ```bash
-just validate
+xcode-select --install
 ```
-This script is your first line of defense, providing fast feedback on structural errors, broken internal links, missing image assets, and other common issues.
 
-#### 2. Generate the Website
-This is the main command to build the entire site from scratch.
+### Step 2: Clone and Compile the Project
+
+First, clone the project repository and compile the source code. The `release` target is recommended for general use as it creates an optimized executable.
+
 ```bash
-just web```
-This command builds the Docker image and runs the container, which executes the full Python generation pipeline. The final static website is placed in the `output/` directory.
 
-#### 3. Run a Local Development Server
-To preview your generated site with hot-reloading.
-```bash
-# 1. Generate the project first
-just web
 
-# 2. Run the dev server
-just run web
+# Clone the repository (replace with your actual repository URL)
+git https://github.com/Eris-Margeta/dircontxt
+cd dircontxt
+
+# Compile the project for release
+make release
 ```
-*   **`project_folder`**: The argument `web` corresponds to the `project_name` defined in your `config/site_config.yaml`.
-*   **What it does**: This command navigates into `output/web`, correctly reinstalls Node.js dependencies for your local operating system (e.g., macOS/Windows), and starts the Astro development server (`pnpm dev`). This step is crucial for local development after a Docker build.
 
-#### 4. Clean the Output Directory
+This will create the executable at `build/bin/dircontxt`.
+
+### Step 3: Create a Runner Script
+
+To make the command globally available, we'll create a simple wrapper script.
+
+1.  **Get the absolute path** to the compiled executable. While inside the `dircontxt` project directory, run:
+    ```bash
+    echo "$(pwd)/build/bin/dircontxt"
+    ```
+    Copy the output path. It should look something like `/Users/yourname/DEV/dircontxt/build/bin/dircontxt`.
+
+2.  Create a standard directory for your personal scripts if you don't have one:
+    ```bash
+    mkdir -p ~/.local/bin
+    ```
+
+3.  Create the script file named `dctx`:
+    ```bash
+    nano ~/.local/bin/dctx
+    ```
+
+4.  Paste the following code into the nano editor. **Crucially, replace the placeholder path in `APP_PATH` with the one you copied in step 1.**
+
+    ```sh
+    #!/bin/zsh
+
+    # --- CONFIGURATION ---
+    # IMPORTANT: Replace this path with the absolute path to YOUR executable.
+    APP_PATH="/Users/yourname/DEV/dircontxt/build/bin/dircontxt"
+
+    # --- SCRIPT LOGIC ---
+    if [ ! -x "$APP_PATH" ]; then
+      echo "Error: dircontxt executable not found at:" >&2
+      echo "$APP_PATH" >&2
+      echo "Please check the APP_PATH in ~/.local/bin/dctx" >&2
+      exit 1
+    fi
+
+    # Use the first argument as the target directory, or default to the current directory ('.').
+    TARGET_DIR="${1:-.}"
+
+    # Execute the application
+    "$APP_PATH" "$TARGET_DIR"
+    ```
+
+5.  Save the file and exit nano by pressing `Ctrl + X`, then `Y`, then `Enter`.
+
+### Step 4: Make the Script Executable
+
 ```bash
-just clean```
-Deletes the entire `output/` directory so you can start a fresh build.
+chmod +x ~/.local/bin/dctx
+```
 
-## 6. Configuration Guide
+### Step 5: Add the Script Directory to your Zsh PATH
 
-### `config/site_config.yaml`
-This file controls all global settings.
+1.  Open your Zsh configuration file:
+    ```bash
+    nano ~/.zshrc
+    ```
 
-| Key | Type | Description |
-| :--- | :--- | :--- |
-| `project_name` | `string` | A short, machine-friendly name for the project. Used for the output directory name. |
-| `site_domain` | `URL` | The full, canonical domain of your website (e.g., `https://www.yourdomain.com`). |
-| `site_name` | `string` | The human-readable name of your website, used in SEO metadata. |
-| `author` | `string` | The author's name, used in the footer and metadata. |
-| `default_og_locale`| `string` | The default Open Graph locale (e.g., `en_US`). |
-| `social_profiles`| `object` | Contains keys for social media handles and URLs (e.g., `twitter_username`, `linkedin_company_url`). |
-| `languages` | `list` | A list of supported languages. Each item is an object with `code`, `name`, and optional `og_locale`. **The first language in the list is the default.** |
-| `navbar_ctas` | `object` | Defines the global primary and secondary "Call to Action" buttons in the navigation bar. |
-| `global_nav_links`| `object` | Defines the main navigation links for each language. The keys are language codes. |
-| `astro_config_defaults`| `object` | Sets default values for Astro's configuration, such as `base_path` and `output_mode`. |
+2.  Add the following line to the end of the file. This tells your shell to look for commands in your personal scripts folder.
 
-### Page Configuration (`config/pages/*.yaml`)
-Each file defines a page and its content.
+    ```sh
+    # Add local bin directory for custom scripts
+    export PATH="$HOME/.local/bin:$PATH"
+    ```
 
-| Key | Type | Description |
-| :--- | :--- | :--- |
-| `page_id` | `string` | A unique, snake_case identifier for the page (e.g., `about_us`). **This is critical** as it's used to link pages together. |
-| `is_conversion_page`| `boolean`| If `true`, the header and footer may render differently (e.g., a simpler footer). |
-| `no_index` | `boolean`| If `true`, the page will be marked with `noindex` for search engines. |
-| `tags` | `list` | A list of internal tags for categorization or special handling. |
-| `en:`, `hr:`, etc. | `object` | A top-level key for each language code defined in `site_config.yaml`. |
+3.  Save and exit (`Ctrl + X`, `Y`, `Enter`).
 
-Inside each language block:
+### Step 6: Reload Your Shell Configuration
 
-| Key | Type | Description |
-| :--- | :--- | :--- |
-| `slug` | `string` | The URL slug for this page in this language (e.g., `about-us`). Use `null` for the homepage. |
-| `seo` | `object` | Contains all SEO metadata for this language: `title`, `meta_description`, `keywords`, Open Graph (`og_*`), and Twitter (`twitter_*`) properties. |
-| `sections`| `list` | The content of the page, defined as a list of section objects. Each object has a `type`, a unique HTML `id`, and a `content` block with fields specific to that section type. |
+Apply the changes to your current terminal session:
 
-## 7. Customization and Extensibility
+```bash
+source ~/.zshrc```
 
-### How to Add a New Page
-1.  **Create a New File**: Add a new YAML file in `config/pages/`, for example `services.yaml`.
-2.  **Define Content**: Populate the file with a unique `page_id` (e.g., `services`) and add the content for each language under its respective key (`en:`, `hr:`, etc.).
-3.  **Link the Page**: Add a reference to the new page in `config/site_config.yaml` under `global_nav_links` for each language to make it appear in the navigation menu.
-4.  **Validate**: Run `just validate` to check for any errors.
+### Step 7: Verify the Installation
 
-### How to Add a New Section Type
-This is an advanced task that involves touching multiple parts of the system. Let's say you want to create a new `video_embed` section.
+You're all set! Verify that the command works by checking its version.
 
-1.  **Define the Pydantic Model**:
-    *   Open `src_py/config_models/sections.py`.
-    *   Create a new Pydantic class: `class VideoEmbedSectionContentModel(BaseModel): video_url: HttpUrl; caption: Optional[str] = None`.
-    *   Add this new model to the `SectionContentType = Union[...]` list.
-    *   Add a mapping in the `type_to_content_model_map` dictionary within the `SectionModel` validator: `"video_embed": VideoEmbedSectionContentModel`.
-2.  **Update Validator Map**:
-    *   Open `scripts/validators/utils.py`.
-    *   Add a new entry to the `SECTION_TYPE_MAP` dictionary: `'video_embed': {'model': VideoEmbedSectionContentModel, 'astro_component': 'video-embed.astro'}`.
-3.  **Create the Astro Component Template**:
-    *   Create a new file: `templates_astro/src/components/sections/video-embed.astro.j2`.
-    *   Write the Astro code to render the video. You can access the content via props:
-        ```astro
-        ---
-        // templates_astro/src/components/sections/video-embed.astro.j2
-        export interface Props {
-          video_url: string;
-          caption?: string;
-        }
-        const { video_url, caption } = Astro.props;
-        ---
-        <section>
-          <iframe src={video_url} title="Embedded Video"></iframe>
-          {caption && <p>{caption}</p>}
-        </section>
-        ```4.  **Use the New Section**:
-    *   In any page YAML file (e.g., `homepage.yaml`), you can now add a new section:
-        ```yaml
-        - type: "video_embed"
-          id: "promo-video"
-          content:
-            video_url: "https://www.youtube.com/embed/..."
-            caption: "Our amazing new product."
-        ```
-5.  **Validate and Rebuild**: Run `just validate` to check your work, then `just web` to generate the site with the new component.
+```bash
+dctx -v
+# You should see: [INFO] dircontxt v0.1.0 starting.
+```
+
+---
+
+## Rebuilding the Project
+
+After making changes to the source code, you should perform a clean rebuild to ensure all updates are compiled correctly. For general use, creating a release build is recommended as it is optimized for performance and size.
+
+From your project's root directory, run the following commands in your terminal:
+
+1.  **Clean all previous build artifacts:**
+    ```bash
+    make clean
+    ```
+2.  **Build the optimized release version:**
+    ```bash
+    make release
+    ```
+This will create the final, stripped executable at `build/bin/dircontxt`. Your `dctx` command will automatically use this new version the next time you run it.
+
+---
+
+## `dctx` Usage and Configuration Guide
+
+### Basic Usage
+
+The `dctx` command processes a directory and generates a `.dircontxt` binary file and a `.llmcontext.txt` text file.
+
+**Syntax:**
+```bash
+dctx [directory_path]
+```
+*   `[directory_path]`: The path to the directory you want to capture. If omitted, it defaults to the **current directory (`.`)**.
+
+**Output Location:**
+The output files are always created in the **parent directory** of the target you specify. This is a deliberate design choice to prevent the output files from being included in subsequent runs.
+
+**Examples:**
+
+1.  **Capture the current project:**
+    ```bash
+    # Navigate into your project folder
+    cd ~/DEV/my-project
+
+    # Run the command
+    dctx .
+    ```
+    *Output will be created at `~/DEV/my-project.dircontxt` and `~/DEV/my-project.llmcontext.txt`.*
+
+2.  **Capture a different project by path:**
+    ```bash
+    # Run the command from anywhere, targeting a specific folder
+    dctx ~/Documents/another-project
+    ```
+    *Output will be created at `~/Documents/another-project.dircontxt` and `~/Documents/another-project.llmcontext.txt`.*
+
+### Configuring Ignore Rules
+
+Your `dctx` command uses a powerful three-tiered system to determine which files and directories to exclude from the snapshot.
+
+#### The Hierarchy of Rules
+
+Rules are loaded from three sources, in order from lowest to highest priority:
+
+1.  **Default (Built-in) Rules - Lowest Priority**:
+    The application has a hardcoded list of common patterns to ignore, such as `.git/`, `node_modules/`, and `.DS_Store`. These are always active.
+
+2.  **Global Ignore File - Medium Priority**:
+    You can create a global ignore file at `~/.config/dircontxt/ignore`. Rules in this file apply to *every* directory you run `dctx` on and will override the default rules.
+
+3.  **Project Ignore File (`.dircontxtignore`) - Highest Priority**:
+    A file named `.dircontxtignore` in the root of the directory you are capturing provides project-specific rules. These are the most important rules and override any conflicting global or default rules.
+
+#### Rule Precedence: The Last Match Wins
+
+The most important concept is that **the last rule in the combined list that matches a file determines its fate.** This is what allows negation (`!`) to work. If a file is ignored by a general rule but re-included by a later, more specific negation rule, it will be included in the final snapshot.
+
+#### Pattern Syntax Guide
+
+Here is how to write patterns in your `.dircontxtignore` or global ignore file:
+
+| Pattern Example         | Description                                                                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `# comments`            | Lines starting with `#` are ignored.                                                                                                     |
+| `build/`                | A name ending in a `/` matches **only directories**. This ignores any directory named `build` anywhere in the project.                     |
+| `*.log`                 | A leading `*` acts as a wildcard. This ignores any file or directory ending with `.log`.                                                 |
+| `my-file.tmp`           | A simple name matches any file or directory with that name anywhere in the tree.                                                         |
+| `src/config.json`       | Patterns containing a `/` are matched against the full relative path from the project root. This only ignores `config.json` inside `src/`. |
+| `!important.log`        | A leading `!` **negates** the pattern. This re-includes a file that was previously ignored by a more general rule.                         |
+| `build/*`               | A wildcard at the end of a path ignores all files and folders *inside* the `build` directory, but not the directory itself.                |
+
+---
+
+## Understanding the Output Files
+
+For a target directory named `my-project`, `dctx` will generate two files:
+
+### 1. The Binary Archive: `my-project.dircontxt`
+
+This is a compact, machine-readable archive containing the complete directory snapshot.
+
+*   **Purpose**: It serves as the single source of truth for the directory's state at the time of capture. It is optimized for storage and programmatic access.
+*   **Structure**:
+    1.  **Signature**: A unique 8-byte header (`DIRCTXTV`) to identify the file type.
+    2.  **Header Section**: A serialized representation of the entire directory tree, including metadata for every file and folder (paths, timestamps, etc.).
+    3.  **Data Section**: The concatenated, raw contents of every file in the tree.
+
+This file is used by the `dctx` tool itself to generate the text-based LLM snapshot.
+
+### 2. The LLM Snapshot: `my-project.llmcontext.txt`
+
+This is a verbose, structured text file designed to be easily understood by an AI, like Gemini.
+
+*   **Purpose**: To provide a complete and easily parsable context of a software project to an AI for tasks like code review, documentation, debugging, or analysis.
+*   **Structure**:
+    *   `[DIRCONTXT_LLM_SNAPSHOT_V1.2]`: A version header.
+    *   `<INSTRUCTIONS>`: A short guide explaining how to read the file format.
+    *   `<DIRECTORY_TREE>`: A manifest of all files and directories. Each entry includes:
+        *   `[D]` for directory or `[F]` for file.
+        *   The relative path of the item.
+        *   A unique `ID` (e.g., `F001`, `D002`) used to link to its content.
+        *   The `MOD` (Unix modification timestamp) and `SIZE` (in bytes).
+    *   `<FILE_CONTENT_START ID="...">` and `</FILE_CONTENT_END>`: Blocks that contain the full content of each text file, linked by the ID from the directory tree.
+    *   **Binary Placeholders**: If a file is identified as binary, its content is replaced with a placeholder (e.g., `[BINARY CONTENT PLACEHOLDER - Size: 13072 bytes]`) to keep the snapshot clean and readable.
+```
