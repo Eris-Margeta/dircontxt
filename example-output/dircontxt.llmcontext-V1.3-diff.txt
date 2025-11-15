@@ -1,0 +1,654 @@
+[DIRCONTXT_LLM_DIFF_V1]
+Version Change: V1.2 -> V1.3
+
+<CHANGES_SUMMARY>
+[MODIFIED] src/llm_formatter.c
+[MODIFIED] src/main.c
+</CHANGES_SUMMARY>
+
+<UPDATED_DIRECTORY_TREE>
+[D]  (ID:ROOT, MOD:1763224905)
+  [F] example-output.txt (ID:F001, MOD:1759960153, SIZE:121641)
+  [F] .dircontxtignore (ID:F002, MOD:1759959022, SIZE:791)
+  [F] Makefile (ID:F003, MOD:1763215111, SIZE:4475)
+  [F] usage.md (ID:F004, MOD:1759958907, SIZE:6210)
+  [F] TODO.md (ID:F005, MOD:1763224198, SIZE:7228)
+  [F] README.md (ID:F006, MOD:1763212880, SIZE:11018)
+  [D] src (ID:D007, MOD:1763224744)
+    [F] src/diff.c (ID:F008, MOD:1763220197, SIZE:5911)
+    [F] src/utils.h (ID:F009, MOD:1749021358, SIZE:2084)
+    [F] src/dctx_reader.h (ID:F010, MOD:1749025324, SIZE:3671)
+    [F] src/ignore.h (ID:F011, MOD:1759958628, SIZE:2621)
+    [F] src/walker.h (ID:F012, MOD:1749021664, SIZE:1172)
+    [F] src/version.h (ID:F013, MOD:1763218722, SIZE:1459)
+    [F] src/writer.c (ID:F014, MOD:1749021848, SIZE:10025)
+    [F] src/llm_formatter.c (ID:F015, MOD:1763224744, SIZE:13074)
+    [F] src/config.h (ID:F016, MOD:1763215091, SIZE:815)
+    [F] src/platform.c (ID:F017, MOD:1763222932, SIZE:3770)
+    [F] src/datatypes.h (ID:F018, MOD:1759958756, SIZE:2192)
+    [F] src/walker.c (ID:F019, MOD:1763222259, SIZE:7666)
+    [F] src/diff.h (ID:F020, MOD:1763218814, SIZE:1732)
+    [F] src/ignore.c (ID:F021, MOD:1759958569, SIZE:8266)
+    [F] src/dctx_reader.c (ID:F022, MOD:1749025395, SIZE:12686)
+    [F] src/utils.c (ID:F023, MOD:1749029164, SIZE:6857)
+    [F] src/main.c (ID:F024, MOD:1763224359, SIZE:9143)
+    [F] src/config.c (ID:F025, MOD:1763215082, SIZE:3685)
+    [F] src/llm_formatter.h (ID:F026, MOD:1763221681, SIZE:2339)
+    [F] src/version.c (ID:F027, MOD:1763218771, SIZE:2509)
+    [F] src/writer.h (ID:F028, MOD:1749028956, SIZE:1210)
+    [F] src/platform.h (ID:F029, MOD:1749021163, SIZE:2566)
+</UPDATED_DIRECTORY_TREE>
+
+<FILE_CONTENT_START ID="F015" PATH="src/llm_formatter.c">
+#include "llm_formatter.h"
+#include "datatypes.h"
+#include "dctx_reader.h"
+#include "utils.h"
+#include "version.h" // For version header constants
+
+#include <ctype.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h> // For strcasecmp (POSIX)
+#include <time.h>
+
+// --- Static Helper Function Declarations ---
+
+static void write_manifest_entry_recursive(FILE *fp, DirContextTreeNode *node,
+                                           int indent_level,
+                                           int *shared_id_counter);
+static bool write_file_content_block(FILE *fp,
+                                     const DirContextTreeNode *file_node,
+                                     FILE *dctx_binary_fp,
+                                     uint64_t data_section_offset);
+static bool is_likely_binary(const char *buffer, size_t size,
+                             const char *path_for_ext_check);
+static bool write_all_file_content_blocks_recursive(
+    FILE *fp, const DirContextTreeNode *node, FILE *dctx_binary_fp,
+    uint64_t data_section_offset);
+static DirContextTreeNode *
+find_node_by_path_recursive(DirContextTreeNode *node,
+                            const char *relative_path);
+
+// --- Public Function Implementations ---
+
+bool generate_llm_context_file(const char *llm_txt_filepath,
+                               DirContextTreeNode *root_node,
+                               const char *dctx_binary_filepath,
+                               uint64_t data_section_start_offset_in_dctx_file,
+                               const char *version_string) {
+  if (llm_txt_filepath == NULL || root_node == NULL ||
+      dctx_binary_filepath == NULL || version_string == NULL) {
+    log_error("llm_formatter: Invalid arguments for generating context file.");
+    return false;
+  }
+
+  FILE *llm_fp = fopen(llm_txt_filepath, "w");
+  if (llm_fp == NULL) {
+    log_error(
+        "llm_formatter: Failed to open LLM context file '%s' for writing: %s",
+        llm_txt_filepath, strerror(errno));
+    return false;
+  }
+
+  // --- Write Header ---
+  fprintf(llm_fp, "%s%s%s\n\n", VERSION_HEADER_PREFIX, version_string,
+          VERSION_HEADER_SUFFIX);
+  fprintf(llm_fp, "<INSTRUCTIONS>\n");
+  fprintf(llm_fp, "1. Manifest: The \"DIRECTORY_TREE\" section below lists all "
+                  "files and directories.\n");
+  fprintf(llm_fp, "   - Each entry: [TYPE] RELATIVE_PATH (ID:UNIQUE_ID, "
+                  "MOD:UNIX_TIMESTAMP, SIZE:BYTES)\n");
+  fprintf(llm_fp, "   - TYPE is [D] for directory, [F] for file.\n");
+  fprintf(llm_fp, "   - SIZE is for files only.\n");
+  fprintf(llm_fp, "   - Binary files may be noted with (CONTENT:BINARY_HINT or "
+                  "CONTENT:BINARY_PLACEHOLDER).\n");
+  fprintf(llm_fp, "2. Content Access: To read a specific file:\n");
+  fprintf(llm_fp, "   - Find its UNIQUE_ID from the DIRECTORY_TREE.\n");
+  fprintf(
+      llm_fp,
+      "   - Search for the marker: <FILE_CONTENT_START ID=\"UNIQUE_ID\">\n");
+  fprintf(llm_fp, "   - The content is between this marker and "
+                  "<FILE_CONTENT_END ID=\"UNIQUE_ID\">\n");
+  fprintf(llm_fp, "</INSTRUCTIONS>\n\n");
+
+  // --- Write Directory Tree ---
+  fprintf(llm_fp, "<DIRECTORY_TREE>\n");
+  int shared_id_counter = 1;
+  write_manifest_entry_recursive(llm_fp, root_node, 0, &shared_id_counter);
+  fprintf(llm_fp, "</DIRECTORY_TREE>\n");
+
+  // --- Write File Contents ---
+  FILE *dctx_binary_fp = fopen(dctx_binary_filepath, "rb");
+  if (dctx_binary_fp == NULL) {
+    log_error("llm_formatter: Failed to open .dircontxt binary '%s' for "
+              "reading content: %s",
+              dctx_binary_filepath, strerror(errno));
+    fclose(llm_fp);
+    return false;
+  }
+
+  write_all_file_content_blocks_recursive(
+      llm_fp, root_node, dctx_binary_fp,
+      data_section_start_offset_in_dctx_file);
+
+  fclose(dctx_binary_fp);
+
+  // --- Finalize and Close ---
+  bool success = true;
+  if (fclose(llm_fp) == EOF) {
+    log_error("llm_formatter: Error closing LLM context file '%s': %s",
+              llm_txt_filepath, strerror(errno));
+    success = false;
+  }
+
+  return success;
+}
+
+bool generate_diff_file(const char *diff_filepath, const DiffReport *report,
+                        DirContextTreeNode *new_root_node,
+                        const char *dctx_binary_filepath,
+                        uint64_t data_section_start_offset_in_dctx_file,
+                        const char *old_version, const char *new_version) {
+
+  if (diff_filepath == NULL || report == NULL || new_root_node == NULL ||
+      dctx_binary_filepath == NULL) {
+    log_error("llm_formatter: Invalid arguments for generating diff file.");
+    return false;
+  }
+
+  FILE *diff_fp = fopen(diff_filepath, "w");
+  if (diff_fp == NULL) {
+    log_error("llm_formatter: Failed to open diff file '%s' for writing: %s",
+              diff_filepath, strerror(errno));
+    return false;
+  }
+
+  // --- Write Diff Header ---
+  fprintf(diff_fp, "[DIRCONTXT_LLM_DIFF_V1]\n");
+  fprintf(diff_fp, "Version Change: %s -> %s\n\n", old_version, new_version);
+
+  // --- Write Summary of Changes ---
+  fprintf(diff_fp, "<CHANGES_SUMMARY>\n");
+  for (int i = 0; i < report->count; ++i) {
+    const DiffEntry *entry = &report->entries[i];
+    const char *type_str = "UNKNOWN";
+    if (entry->type == ITEM_ADDED)
+      type_str = "ADDED";
+    if (entry->type == ITEM_REMOVED)
+      type_str = "REMOVED";
+    if (entry->type == ITEM_MODIFIED)
+      type_str = "MODIFIED";
+
+    fprintf(diff_fp, "[%s] %s%s\n", type_str, entry->relative_path,
+            (entry->node_type == NODE_TYPE_DIRECTORY ? "/" : ""));
+  }
+  fprintf(diff_fp, "</CHANGES_SUMMARY>\n\n");
+
+  // --- Write the NEW Directory Tree ---
+  fprintf(diff_fp, "<UPDATED_DIRECTORY_TREE>\n");
+  int shared_id_counter = 1; // Reset counter for the new tree
+  write_manifest_entry_recursive(diff_fp, new_root_node, 0, &shared_id_counter);
+  fprintf(diff_fp, "</UPDATED_DIRECTORY_TREE>\n");
+
+  // --- Write Content of ADDED and MODIFIED Files ---
+  FILE *dctx_binary_fp = fopen(dctx_binary_filepath, "rb");
+  if (dctx_binary_fp == NULL) {
+    log_error("llm_formatter (diff): Failed to open .dircontxt binary '%s' for "
+              "reading content: %s",
+              dctx_binary_filepath, strerror(errno));
+    fclose(diff_fp);
+    return false;
+  }
+
+  for (int i = 0; i < report->count; ++i) {
+    const DiffEntry *entry = &report->entries[i];
+    if ((entry->type == ITEM_ADDED || entry->type == ITEM_MODIFIED) &&
+        entry->node_type == NODE_TYPE_FILE) {
+      DirContextTreeNode *node_to_write =
+          find_node_by_path_recursive(new_root_node, entry->relative_path);
+      if (node_to_write) {
+        write_file_content_block(diff_fp, node_to_write, dctx_binary_fp,
+                                 data_section_start_offset_in_dctx_file);
+      }
+    }
+  }
+
+  fclose(dctx_binary_fp);
+
+  // --- Finalize and Close ---
+  bool success = true;
+  if (fclose(diff_fp) == EOF) {
+    log_error("llm_formatter: Error closing diff file '%s': %s", diff_filepath,
+              strerror(errno));
+    success = false;
+  }
+  return success;
+}
+
+// --- Static Helper Function Implementations ---
+
+static void write_manifest_entry_recursive(FILE *fp, DirContextTreeNode *node,
+                                           int indent_level,
+                                           int *shared_id_counter) {
+  if (node == NULL)
+    return;
+
+  for (int i = 0; i < indent_level; ++i)
+    fprintf(fp, "  ");
+
+  if (node->type == NODE_TYPE_DIRECTORY) {
+    if (indent_level == 0) {
+      strcpy(node->generated_id_for_llm, "ROOT");
+    } else {
+      snprintf(node->generated_id_for_llm, sizeof(node->generated_id_for_llm),
+               "D%03d", (*shared_id_counter)++);
+    }
+    fprintf(fp, "[D] %s (ID:%s, MOD:%lld)\n", node->relative_path,
+            node->generated_id_for_llm,
+            (long long)node->last_modified_timestamp);
+    for (uint32_t i = 0; i < node->num_children; ++i) {
+      write_manifest_entry_recursive(fp, node->children[i], indent_level + 1,
+                                     shared_id_counter);
+    }
+  } else { // NODE_TYPE_FILE
+    snprintf(node->generated_id_for_llm, sizeof(node->generated_id_for_llm),
+             "F%03d", (*shared_id_counter)++);
+    fprintf(fp, "[F] %s (ID:%s, MOD:%lld, SIZE:%lld", node->relative_path,
+            node->generated_id_for_llm,
+            (long long)node->last_modified_timestamp,
+            (long long)node->content_size);
+
+    if (is_likely_binary(NULL, 0, node->relative_path)) {
+      fprintf(fp, ", CONTENT:BINARY_HINT");
+    }
+    fprintf(fp, ")\n");
+  }
+}
+
+static bool write_file_content_block(FILE *fp,
+                                     const DirContextTreeNode *file_node,
+                                     FILE *dctx_binary_fp,
+                                     uint64_t data_section_offset) {
+  if (file_node->type != NODE_TYPE_FILE)
+    return true;
+  if (file_node->generated_id_for_llm[0] == '\0') {
+    log_error("llm_formatter: Skipping content block for file '%s' due to "
+              "missing generated ID.",
+              file_node->relative_path);
+    return true;
+  }
+
+  fprintf(fp, "\n<FILE_CONTENT_START ID=\"%s\" PATH=\"%s\">\n",
+          file_node->generated_id_for_llm, file_node->relative_path);
+
+  if (file_node->content_size > 0) {
+    char *content_buffer = (char *)malloc(file_node->content_size);
+    if (content_buffer == NULL) {
+      fprintf(fp, "[ERROR: Could not allocate memory to read file content]\n");
+    } else {
+      if (!dctx_read_file_content(dctx_binary_fp, data_section_offset,
+                                  file_node, content_buffer,
+                                  file_node->content_size)) {
+        fprintf(
+            fp,
+            "[ERROR: Could not read file content from .dircontxt binary]\n");
+      } else {
+        if (is_likely_binary(content_buffer, file_node->content_size,
+                             file_node->relative_path)) {
+          fprintf(fp, "[BINARY CONTENT PLACEHOLDER - Size: %llu bytes]\n",
+                  (unsigned long long)file_node->content_size);
+        } else {
+          fwrite(content_buffer, 1, file_node->content_size, fp);
+        }
+      }
+      free(content_buffer);
+    }
+  }
+
+  fprintf(fp, "</FILE_CONTENT_END ID=\"%s\">\n",
+          file_node->generated_id_for_llm);
+  return true;
+}
+
+static bool is_likely_binary(const char *buffer, size_t size,
+                             const char *path_for_ext_check) {
+  // --- Check 1: By file extension ---
+  const char *binary_exts[] = {
+      ".png", ".jpg",   ".jpeg", ".gif", ".bmp",    ".ico", ".tiff", ".mp3",
+      ".wav", ".flac",  ".ogg",  ".mp4", ".mov",    ".avi", ".mkv",  ".pdf",
+      ".zip", ".gz",    ".tar",  ".rar", ".7z",     ".bz2", ".exe",  ".dll",
+      ".so",  ".dylib", ".o",    ".a",   ".lib",    ".bin", ".dat",  ".iso",
+      ".img", ".class", ".jar",  ".pyc", ".sqlite", ".db"};
+  const char *ext = strrchr(path_for_ext_check, '.');
+  if (ext) {
+    for (size_t i = 0; i < sizeof(binary_exts) / sizeof(binary_exts[0]); ++i) {
+      if (strcasecmp(ext, binary_exts[i]) == 0) {
+        return true;
+      }
+    }
+  }
+
+  // --- Check 2: By content (if buffer is provided) ---
+  if (buffer == NULL || size == 0) {
+    return false; // Cannot check content, rely on extension check result
+  }
+
+  // Contains null bytes (a strong indicator)
+  if (memchr(buffer, '\0', size) != NULL) {
+    return true;
+  }
+
+  // High percentage of non-printable ASCII characters
+  int non_printable = 0;
+  size_t check_len = size < 512 ? size : 512;
+  for (size_t i = 0; i < check_len; i++) {
+    if (!isprint((unsigned char)buffer[i]) &&
+        !isspace((unsigned char)buffer[i])) {
+      non_printable++;
+    }
+  }
+  if (check_len > 0 && (double)non_printable / check_len > 0.2) { // Over 20%
+    return true;
+  }
+
+  return false;
+}
+
+static bool write_all_file_content_blocks_recursive(
+    FILE *fp, const DirContextTreeNode *node, FILE *dctx_binary_fp,
+    uint64_t data_section_offset) {
+  if (node == NULL)
+    return true;
+  if (node->type == NODE_TYPE_FILE) {
+    write_file_content_block(fp, node, dctx_binary_fp, data_section_offset);
+  } else if (node->type == NODE_TYPE_DIRECTORY) {
+    for (uint32_t i = 0; i < node->num_children; ++i) {
+      write_all_file_content_blocks_recursive(
+          fp, node->children[i], dctx_binary_fp, data_section_offset);
+    }
+  }
+  return true;
+}
+
+static DirContextTreeNode *
+find_node_by_path_recursive(DirContextTreeNode *node,
+                            const char *relative_path) {
+  if (node == NULL)
+    return NULL;
+
+  if (strcmp(node->relative_path, relative_path) == 0) {
+    return node;
+  }
+
+  if (node->type == NODE_TYPE_DIRECTORY) {
+    for (uint32_t i = 0; i < node->num_children; ++i) {
+      if (strncmp(relative_path, node->children[i]->relative_path,
+                  strlen(node->children[i]->relative_path)) == 0) {
+        DirContextTreeNode *found =
+            find_node_by_path_recursive(node->children[i], relative_path);
+        if (found)
+          return found;
+      }
+    }
+  }
+
+  return NULL;
+}
+</FILE_CONTENT_END ID="F015">
+
+<FILE_CONTENT_START ID="F024" PATH="src/main.c">
+#include <libgen.h> // For basename()
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h> // For stat() used in file_exists
+
+#include "config.h"
+#include "datatypes.h"
+#include "dctx_reader.h"
+#include "diff.h"
+#include "ignore.h"
+#include "llm_formatter.h"
+#include "platform.h"
+#include "utils.h"
+#include "version.h"
+#include "walker.h"
+#include "writer.h"
+
+// --- Constants ---
+#define APP_NAME "dircontxt"
+#define APP_VERSION "0.1.0"
+
+// --- Function Declarations ---
+static void print_usage(void);
+static bool file_exists(const char *filepath);
+static bool determine_output_filepaths(
+    const char *target_dir_abs_path, char *dctx_output_filepath_out,
+    size_t dctx_buffer_size, char *llm_output_filepath_out,
+    size_t llm_buffer_size, char *diff_filepath_out, size_t diff_buffer_size,
+    const char *version_string);
+
+// --- Main Function ---
+int main(int argc, char *argv[]) {
+  AppConfig config;
+  load_app_config(&config);
+
+  log_info("%s v%s starting.", APP_NAME, APP_VERSION);
+
+  if (argc != 2 ||
+      (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
+    print_usage();
+    return EXIT_SUCCESS;
+  }
+  if (strcmp(argv[1], "-v") == 0 || strcmp(argv[1], "--version") == 0) {
+    return EXIT_SUCCESS;
+  }
+
+  // --- 1. Path Resolution and Initial Setup ---
+  char target_dir_abs_path[MAX_PATH_LEN];
+  char dctx_filepath[MAX_PATH_LEN];
+  char llm_txt_filepath[MAX_PATH_LEN];
+  char diff_filepath[MAX_PATH_LEN];
+
+  if (!platform_resolve_path(argv[1], target_dir_abs_path, MAX_PATH_LEN)) {
+    log_error("Failed to resolve target directory path: %s", argv[1]);
+    return EXIT_FAILURE;
+  }
+  log_info("Target directory resolved to: %s", target_dir_abs_path);
+
+  // --- 2. Versioning Logic ---
+  char old_version[32] = {0};
+  char new_version[32] = {0};
+  DirContextTreeNode *old_tree = NULL;
+
+  determine_output_filepaths(target_dir_abs_path, dctx_filepath, MAX_PATH_LEN,
+                             llm_txt_filepath, MAX_PATH_LEN, diff_filepath,
+                             MAX_PATH_LEN, "");
+
+  if (file_exists(llm_txt_filepath) && file_exists(dctx_filepath)) {
+    log_info("Existing context and binary files found. Running in update/diff "
+             "mode.");
+    if (!parse_version_from_file(llm_txt_filepath, old_version,
+                                 sizeof(old_version))) {
+      log_error("Could not parse version. Starting over with V1.");
+      safe_strncpy(old_version, "V1", sizeof(old_version));
+    }
+    calculate_next_version(old_version, new_version, sizeof(new_version));
+
+    log_info("Loading previous state from %s", dctx_filepath);
+    uint64_t old_data_offset;
+    if (!dctx_read_and_parse_header(dctx_filepath, &old_tree,
+                                    &old_data_offset)) {
+      log_error("Failed to read previous binary file. Old state ignored.");
+      old_tree = NULL;
+    }
+  } else {
+    if (file_exists(llm_txt_filepath) && !file_exists(dctx_filepath)) {
+      log_info("Warning: Text file found but required binary archive is "
+               "missing. Cannot perform diff.");
+    }
+    log_info("Creating new V1 snapshot.");
+    safe_strncpy(new_version, "V1", sizeof(new_version));
+    safe_strncpy(old_version, "V1", sizeof(old_version));
+  }
+
+  log_info("Current context version will be: %s", new_version);
+
+  determine_output_filepaths(target_dir_abs_path, dctx_filepath, MAX_PATH_LEN,
+                             llm_txt_filepath, MAX_PATH_LEN, diff_filepath,
+                             MAX_PATH_LEN, new_version);
+
+  // --- 3. Scan Current Directory State ---
+  IgnoreRule *ignore_rules = NULL;
+  int ignore_rule_count = 0;
+  if (!load_ignore_rules(target_dir_abs_path,
+                         platform_get_basename(dctx_filepath), &ignore_rules,
+                         &ignore_rule_count)) {
+    log_error("Failed to load ignore rules.");
+    if (old_tree)
+      free_tree_recursive(old_tree);
+    return EXIT_FAILURE;
+  }
+
+  int processed_items = 0;
+  DirContextTreeNode *new_tree = walk_directory_and_build_tree(
+      target_dir_abs_path, ignore_rules, ignore_rule_count, &processed_items);
+  if (new_tree == NULL) {
+    log_error("Failed to walk directory and build new tree.");
+    if (old_tree)
+      free_tree_recursive(old_tree);
+    free_ignore_rules_array(ignore_rules, ignore_rule_count);
+    return EXIT_FAILURE;
+  }
+  // NOTE: The log message for walk completion is now only in walker.c
+
+  // --- 4. Overwrite Binary and Generate Diff ---
+  int exit_code = EXIT_SUCCESS;
+
+  log_info("Writing binary archive to: %s", dctx_filepath);
+  if (!write_dircontxt_file(dctx_filepath, new_tree)) {
+    log_error("Failed to write the .dircontxt binary file. Cannot proceed.");
+    exit_code = EXIT_FAILURE;
+    goto cleanup;
+  }
+
+  if (old_tree != NULL) {
+    log_info("Comparing new state to previous state...");
+    DiffReport *report = compare_trees(old_tree, new_tree);
+    if (report && report->has_changes) {
+      log_info("Changes detected. Generating diff file: %s", diff_filepath);
+      uint64_t new_data_offset = 0;
+      DirContextTreeNode *temp_tree_for_diff = NULL;
+      if (dctx_read_and_parse_header(dctx_filepath, &temp_tree_for_diff,
+                                     &new_data_offset)) {
+        generate_diff_file(diff_filepath, report, temp_tree_for_diff,
+                           dctx_filepath, new_data_offset, old_version,
+                           new_version);
+        free_tree_recursive(temp_tree_for_diff);
+      }
+    } else {
+      log_info("No changes detected since version %s.", old_version);
+    }
+    free_diff_report(report);
+  }
+
+  // --- 5. Generate Text Output based on Config ---
+  if (config.output_mode == OUTPUT_MODE_BINARY_ONLY) {
+    log_info("Skipping text file generation as per binary-only mode.");
+    if (file_exists(llm_txt_filepath))
+      remove(llm_txt_filepath);
+    if (file_exists(diff_filepath))
+      remove(diff_filepath);
+  } else { // This covers BOTH and TEXT_ONLY modes
+    log_info("Generating LLM context file: %s", llm_txt_filepath);
+    uint64_t final_data_offset = 0;
+    DirContextTreeNode *final_tree_for_llm = NULL;
+
+    if (!dctx_read_and_parse_header(dctx_filepath, &final_tree_for_llm,
+                                    &final_data_offset)) {
+      log_error("Failed to read back binary. Cannot generate text file.");
+      exit_code = EXIT_FAILURE;
+    } else {
+      if (!generate_llm_context_file(llm_txt_filepath, final_tree_for_llm,
+                                     dctx_filepath, final_data_offset,
+                                     new_version)) {
+        log_error("Failed to generate .llmcontext.txt file.");
+        exit_code = EXIT_FAILURE;
+      }
+      free_tree_recursive(final_tree_for_llm);
+    }
+  }
+
+cleanup:
+  // --- 6. Final Memory Free ---
+  if (old_tree)
+    free_tree_recursive(old_tree);
+  if (new_tree)
+    free_tree_recursive(new_tree);
+  free_ignore_rules_array(ignore_rules, ignore_rule_count);
+
+  log_info("dircontxt run finished.");
+  return exit_code;
+}
+
+static void print_usage(void) {
+  printf("Usage: %s <target_directory>\n", APP_NAME);
+  printf("Creates a versioned context snapshot of the specified directory.\n");
+  printf("Behavior is controlled by ~/.config/dircontxt/config\n\n");
+  printf("Options:\n");
+  printf("  -h, --help     Show this help message and exit.\n");
+  printf("  -v, --version  Show version information and exit.\n");
+}
+
+static bool file_exists(const char *filepath) {
+  if (filepath == NULL || filepath[0] == '\0')
+    return false;
+  struct stat buffer;
+  return (stat(filepath, &buffer) == 0);
+}
+
+static bool determine_output_filepaths(
+    const char *target_dir_abs_path, char *dctx_output_filepath_out,
+    size_t dctx_buffer_size, char *llm_output_filepath_out,
+    size_t llm_buffer_size, char *diff_filepath_out, size_t diff_buffer_size,
+    const char *version_string) {
+  char *target_basename = get_directory_basename(target_dir_abs_path);
+  if (!target_basename)
+    return false;
+
+  char *parent_dir = platform_get_dirname(target_dir_abs_path);
+  if (!parent_dir) {
+    free(target_basename);
+    return false;
+  }
+
+  char dctx_filename[MAX_PATH_LEN];
+  snprintf(dctx_filename, MAX_PATH_LEN, "%s.dircontxt", target_basename);
+  platform_join_paths(parent_dir, dctx_filename, dctx_output_filepath_out,
+                      dctx_buffer_size);
+
+  char llm_filename[MAX_PATH_LEN];
+  snprintf(llm_filename, MAX_PATH_LEN, "%s.llmcontext.txt", target_basename);
+  platform_join_paths(parent_dir, llm_filename, llm_output_filepath_out,
+                      llm_buffer_size);
+
+  // Diff file is only created for an update (e.g., "V1.1", "V1.2", etc.)
+  if (version_string != NULL && strchr(version_string, '.') != NULL) {
+    char diff_filename[MAX_PATH_LEN];
+    snprintf(diff_filename, MAX_PATH_LEN, "%s.llmcontext-%s-diff.txt",
+             target_basename, version_string);
+    platform_join_paths(parent_dir, diff_filename, diff_filepath_out,
+                        diff_buffer_size);
+  } else {
+    if (diff_filepath_out != NULL && diff_buffer_size > 0)
+      diff_filepath_out[0] = '\0';
+  }
+
+  free(target_basename);
+  free(parent_dir);
+  return true;
+}
+</FILE_CONTENT_END ID="F024">
