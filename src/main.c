@@ -1,4 +1,6 @@
+/* src/main.c */
 #include <libgen.h> // For basename()
+#include <stdarg.h> // For va_list, va_start, va_end
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +20,7 @@
 
 // --- Constants ---
 #define APP_NAME "dircontxt"
-#define APP_VERSION "0.1.0"
+#define APP_VERSION "0.1.2"
 
 // --- Function Declarations ---
 static void print_usage(void);
@@ -28,6 +30,29 @@ static bool determine_output_filepaths(
     size_t dctx_buffer_size, char *llm_output_filepath_out,
     size_t llm_buffer_size, char *diff_filepath_out, size_t diff_buffer_size,
     const char *version_string);
+
+// Helpers for content verification
+static DirContextTreeNode *find_node_by_path(DirContextTreeNode *root,
+                                             const char *path);
+static bool files_content_identical(const char *disk_path,
+                                    const char *dctx_path,
+                                    uint64_t dctx_data_offset,
+                                    const DirContextTreeNode *old_node);
+static void filter_false_positives(DiffReport *report,
+                                   DirContextTreeNode *old_root,
+                                   DirContextTreeNode *new_root,
+                                   const char *dctx_filepath,
+                                   uint64_t old_data_offset);
+
+// Internal forced logging to debug release builds
+static void log_forced_debug(const char *fmt, ...) {
+  va_list args;
+  printf("[DEBUG] ");
+  va_start(args, fmt);
+  vprintf(fmt, args);
+  va_end(args);
+  printf("\n");
+}
 
 // --- Main Function ---
 int main(int argc, char *argv[]) {
@@ -57,49 +82,40 @@ int main(int argc, char *argv[]) {
   }
   log_info("Target directory resolved to: %s", target_dir_abs_path);
 
-  // --- 2. Versioning Logic ---
+  // --- 2. Load Previous State (If Exists) ---
   char old_version[32] = {0};
   char new_version[32] = {0};
   DirContextTreeNode *old_tree = NULL;
+  uint64_t old_data_offset = 0;
+  bool is_update_mode = false;
 
+  // Determine paths without version string to find existing files
   determine_output_filepaths(target_dir_abs_path, dctx_filepath, MAX_PATH_LEN,
                              llm_txt_filepath, MAX_PATH_LEN, diff_filepath,
                              MAX_PATH_LEN, "");
 
   if (file_exists(llm_txt_filepath) && file_exists(dctx_filepath)) {
-    log_info("Existing context and binary files found. Running in update/diff "
-             "mode.");
+    is_update_mode = true;
     if (!parse_version_from_file(llm_txt_filepath, old_version,
                                  sizeof(old_version))) {
-      log_error("Could not parse version. Starting over with V1.");
+      log_error(
+          "Could not parse version from existing text file. Assuming V1.");
       safe_strncpy(old_version, "V1", sizeof(old_version));
     }
-    calculate_next_version(old_version, new_version, sizeof(new_version));
 
-    log_info("Loading previous state from %s", dctx_filepath);
-    uint64_t old_data_offset;
+    log_info("Loading previous state from %s (Version: %s)", dctx_filepath,
+             old_version);
     if (!dctx_read_and_parse_header(dctx_filepath, &old_tree,
                                     &old_data_offset)) {
       log_error("Failed to read previous binary file. Old state ignored.");
       old_tree = NULL;
+      is_update_mode = false;
     }
   } else {
-    if (file_exists(llm_txt_filepath) && !file_exists(dctx_filepath)) {
-      log_info("Warning: Text file found but required binary archive is "
-               "missing. Cannot perform diff.");
-    }
-    log_info("Creating new V1 snapshot.");
-    safe_strncpy(new_version, "V1", sizeof(new_version));
-    safe_strncpy(old_version, "V1", sizeof(old_version));
+    log_info("No valid previous state found. Starting fresh.");
   }
 
-  log_info("Current context version will be: %s", new_version);
-
-  determine_output_filepaths(target_dir_abs_path, dctx_filepath, MAX_PATH_LEN,
-                             llm_txt_filepath, MAX_PATH_LEN, diff_filepath,
-                             MAX_PATH_LEN, new_version);
-
-  // --- 3. Scan Current Directory State ---
+  // --- 3. Scan Current Directory State (New Tree) ---
   IgnoreRule *ignore_rules = NULL;
   int ignore_rule_count = 0;
   if (!load_ignore_rules(target_dir_abs_path,
@@ -121,9 +137,57 @@ int main(int argc, char *argv[]) {
     free_ignore_rules_array(ignore_rules, ignore_rule_count);
     return EXIT_FAILURE;
   }
-  // NOTE: The log message for walk completion is now only in walker.c
 
-  // --- 4. Overwrite Binary and Generate Diff ---
+  // --- 4. Compare and Determine Next Version ---
+  DiffReport *report = NULL;
+  bool has_actual_changes = false;
+
+  if (is_update_mode && old_tree != NULL) {
+    log_info("Comparing new state to previous state...");
+    report = compare_trees(old_tree, new_tree);
+
+    if (report && report->has_changes) {
+      // Perform deep content verification to ignore "touch" updates
+      // (timestamps changed but content identical)
+      filter_false_positives(report, old_tree, new_tree, dctx_filepath,
+                             old_data_offset);
+    }
+
+    if (report && report->has_changes) {
+      has_actual_changes = true;
+      log_info("Changes detected (%d items modified/added/removed).",
+               report->count);
+    } else {
+      log_info("No actual content changes detected.");
+    }
+  } else {
+    // New snapshot
+    has_actual_changes = true;
+  }
+
+  // Calculate Version String
+  if (is_update_mode) {
+    if (has_actual_changes) {
+      calculate_next_version(old_version, new_version, sizeof(new_version));
+    } else {
+      // No changes: Keep the old version
+      safe_strncpy(new_version, old_version, sizeof(new_version));
+    }
+  } else {
+    safe_strncpy(new_version, "V1", sizeof(new_version));
+    safe_strncpy(old_version, "V1", sizeof(old_version));
+  }
+
+  log_info("Snapshot Version: %s", new_version);
+
+  // Update filepaths with the final determined version (affects Diff filename)
+  determine_output_filepaths(target_dir_abs_path, dctx_filepath, MAX_PATH_LEN,
+                             llm_txt_filepath, MAX_PATH_LEN, diff_filepath,
+                             MAX_PATH_LEN, new_version);
+
+  // --- 5. Overwrite Binary Archive ---
+  // We write this AFTER comparison because comparison reads from the OLD
+  // binary.
   int exit_code = EXIT_SUCCESS;
 
   log_info("Writing binary archive to: %s", dctx_filepath);
@@ -133,34 +197,35 @@ int main(int argc, char *argv[]) {
     goto cleanup;
   }
 
-  if (old_tree != NULL) {
-    log_info("Comparing new state to previous state...");
-    DiffReport *report = compare_trees(old_tree, new_tree);
-    if (report && report->has_changes) {
-      log_info("Changes detected. Generating diff file: %s", diff_filepath);
-      uint64_t new_data_offset = 0;
-      DirContextTreeNode *temp_tree_for_diff = NULL;
-      if (dctx_read_and_parse_header(dctx_filepath, &temp_tree_for_diff,
-                                     &new_data_offset)) {
-        generate_diff_file(diff_filepath, report, temp_tree_for_diff,
-                           dctx_filepath, new_data_offset, old_version,
-                           new_version);
-        free_tree_recursive(temp_tree_for_diff);
-      }
-    } else {
-      log_info("No changes detected since version %s.", old_version);
+  // --- 6. Generate Outputs (Diff and Context) ---
+  if (has_actual_changes && is_update_mode) {
+    // Generate Diff
+    log_info("Generating diff file: %s", diff_filepath);
+
+    // We re-read the binary header just to get the offset of the NEW file
+    uint64_t new_data_offset = 0;
+    DirContextTreeNode *temp_tree_for_diff = NULL;
+
+    if (dctx_read_and_parse_header(dctx_filepath, &temp_tree_for_diff,
+                                   &new_data_offset)) {
+      generate_diff_file(diff_filepath, report, temp_tree_for_diff,
+                         dctx_filepath, new_data_offset, old_version,
+                         new_version);
+      free_tree_recursive(temp_tree_for_diff);
     }
-    free_diff_report(report);
+  } else if (!has_actual_changes && is_update_mode) {
+    // Cleanup any old diff file if we are re-running on same version
+    if (diff_filepath[0] != '\0' && file_exists(diff_filepath)) {
+      remove(diff_filepath);
+    }
   }
 
-  // --- 5. Generate Text Output based on Config ---
+  // Generate Main Context File
   if (config.output_mode == OUTPUT_MODE_BINARY_ONLY) {
     log_info("Skipping text file generation as per binary-only mode.");
     if (file_exists(llm_txt_filepath))
       remove(llm_txt_filepath);
-    if (file_exists(diff_filepath))
-      remove(diff_filepath);
-  } else { // This covers BOTH and TEXT_ONLY modes
+  } else {
     log_info("Generating LLM context file: %s", llm_txt_filepath);
     uint64_t final_data_offset = 0;
     DirContextTreeNode *final_tree_for_llm = NULL;
@@ -181,7 +246,9 @@ int main(int argc, char *argv[]) {
   }
 
 cleanup:
-  // --- 6. Final Memory Free ---
+  // --- 7. Final Memory Free ---
+  if (report)
+    free_diff_report(report);
   if (old_tree)
     free_tree_recursive(old_tree);
   if (new_tree)
@@ -191,6 +258,8 @@ cleanup:
   log_info("dircontxt run finished.");
   return exit_code;
 }
+
+// --- Helper Functions ---
 
 static void print_usage(void) {
   printf("Usage: %s <target_directory>\n", APP_NAME);
@@ -233,7 +302,6 @@ static bool determine_output_filepaths(
   platform_join_paths(parent_dir, llm_filename, llm_output_filepath_out,
                       llm_buffer_size);
 
-  // Diff file is only created for an update (e.g., "V1.1", "V1.2", etc.)
   if (version_string != NULL && strchr(version_string, '.') != NULL) {
     char diff_filename[MAX_PATH_LEN];
     snprintf(diff_filename, MAX_PATH_LEN, "%s.llmcontext-%s-diff.txt",
@@ -248,4 +316,147 @@ static bool determine_output_filepaths(
   free(target_basename);
   free(parent_dir);
   return true;
+}
+
+static DirContextTreeNode *find_node_by_path(DirContextTreeNode *root,
+                                             const char *path) {
+  if (!root)
+    return NULL;
+  if (strcmp(root->relative_path, path) == 0)
+    return root;
+
+  if (root->type == NODE_TYPE_DIRECTORY) {
+    for (uint32_t i = 0; i < root->num_children; ++i) {
+      const char *child_path = root->children[i]->relative_path;
+      size_t child_len = strlen(child_path);
+      if (strncmp(path, child_path, child_len) == 0) {
+        if (path[child_len] == PLATFORM_DIR_SEPARATOR ||
+            path[child_len] == '\0') {
+          DirContextTreeNode *found =
+              find_node_by_path(root->children[i], path);
+          if (found)
+            return found;
+        }
+      }
+    }
+  }
+  return NULL;
+}
+
+static bool files_content_identical(const char *disk_path,
+                                    const char *dctx_path,
+                                    uint64_t dctx_data_offset,
+                                    const DirContextTreeNode *old_node) {
+  FILE *disk_fp = fopen(disk_path, "rb");
+  if (!disk_fp) {
+    log_forced_debug("   -> Verification failed: Could not open disk file '%s'",
+                     disk_path);
+    return false;
+  }
+
+  FILE *dctx_fp = fopen(dctx_path, "rb");
+  if (!dctx_fp) {
+    log_forced_debug("   -> Verification failed: Could not open binary '%s'",
+                     dctx_path);
+    fclose(disk_fp);
+    return false;
+  }
+
+  bool identical = true;
+  char buf1[4096];
+  char buf2[4096];
+
+  uint64_t abs_offset =
+      dctx_data_offset + old_node->content_offset_in_data_section;
+  if (fseek(dctx_fp, (long)abs_offset, SEEK_SET) != 0) {
+    log_forced_debug("   -> Verification failed: fseek error in binary.");
+    identical = false;
+    goto done;
+  }
+
+  size_t remaining = old_node->content_size;
+  while (remaining > 0) {
+    size_t to_read = (remaining < sizeof(buf1)) ? remaining : sizeof(buf1);
+
+    size_t read1 = fread(buf1, 1, to_read, disk_fp);
+    size_t read2 = fread(buf2, 1, to_read, dctx_fp);
+
+    if (read1 != to_read || read2 != to_read) {
+      log_forced_debug("   -> Verification failed: Read size mismatch "
+                       "(Disk:%zu, Bin:%zu, Expected:%zu)",
+                       read1, read2, to_read);
+      identical = false;
+      break;
+    }
+    if (memcmp(buf1, buf2, to_read) != 0) {
+      // Log first few bytes of difference for debugging
+      log_forced_debug(
+          "   -> Verification failed: Content mismatch at some byte.");
+      identical = false;
+      break;
+    }
+    remaining -= to_read;
+  }
+
+done:
+  fclose(disk_fp);
+  fclose(dctx_fp);
+  return identical;
+}
+
+static void filter_false_positives(DiffReport *report,
+                                   DirContextTreeNode *old_root,
+                                   DirContextTreeNode *new_root,
+                                   const char *dctx_filepath,
+                                   uint64_t old_data_offset) {
+  if (!report || report->count == 0)
+    return;
+
+  int new_count = 0;
+  for (int i = 0; i < report->count; ++i) {
+    DiffEntry *entry = &report->entries[i];
+    bool keep = true;
+
+    if (entry->type == ITEM_MODIFIED && entry->node_type == NODE_TYPE_FILE) {
+      DirContextTreeNode *new_node =
+          find_node_by_path(new_root, entry->relative_path);
+      DirContextTreeNode *old_node =
+          find_node_by_path(old_root, entry->relative_path);
+
+      if (new_node && old_node) {
+        if (new_node->content_size == old_node->content_size) {
+          // Sizes match, timestamps differ. Check content.
+          if (files_content_identical(new_node->disk_path, dctx_filepath,
+                                      old_data_offset, old_node)) {
+            keep = false; // Identical content -> False positive
+            log_forced_debug(
+                "Ignoring metadata-only change for: %s (Content Identical)",
+                entry->relative_path);
+          } else {
+            log_forced_debug("Confirmed content change for: %s",
+                             entry->relative_path);
+          }
+        } else {
+          log_forced_debug("Confirmed size change for: %s",
+                           entry->relative_path);
+        }
+      }
+    } else {
+      // Force log addition/removal to see if path matching is the issue
+      if (entry->type == ITEM_ADDED)
+        log_forced_debug("Diff: ADDED %s", entry->relative_path);
+      if (entry->type == ITEM_REMOVED)
+        log_forced_debug("Diff: REMOVED %s", entry->relative_path);
+    }
+
+    if (keep) {
+      if (i != new_count) {
+        report->entries[new_count] = report->entries[i];
+      }
+      new_count++;
+    }
+  }
+
+  report->count = new_count;
+  report->has_changes = (new_count > 0);
 }

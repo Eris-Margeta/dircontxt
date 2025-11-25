@@ -1,3 +1,4 @@
+/* src/utils.c */
 #include "utils.h"
 #include "platform.h" // For PLATFORM_DIR_SEPARATOR
 
@@ -131,22 +132,26 @@ DirContextTreeNode *create_node(NodeType type,
   safe_strncpy(node->relative_path, relative_path_in_archive, MAX_PATH_LEN);
   safe_strncpy(node->disk_path, disk_path_for_stat, MAX_PATH_LEN);
 
+  node->content_offset_in_data_section = 0;
+  node->content_size = 0; // Default initialization
+
   struct stat stat_buf;
   if (platform_get_file_stat(disk_path_for_stat, &stat_buf) == 0) {
     node->last_modified_timestamp = platform_get_mod_time(&stat_buf);
+
+    // FIX: Populate content_size from the file system stat
+    if (node->type == NODE_TYPE_FILE) {
+      node->content_size = (uint64_t)stat_buf.st_size;
+    }
   } else {
     log_error("Failed to stat %s, setting timestamp to 0.", disk_path_for_stat);
     node->last_modified_timestamp = 0;
   }
 
-  node->content_offset_in_data_section = 0;
-  node->content_size = 0;
-
   node->children = NULL;
   node->num_children = 0;
   node->children_capacity = 0;
 
-  // MODIFIED HERE: Initialize the new field
   node->generated_id_for_llm[0] = '\0';
 
   if (type == NODE_TYPE_DIRECTORY) {
@@ -221,25 +226,19 @@ void print_tree_recursive(const DirContextTreeNode *node, int indent_level) {
   }
 
   if (node->type == NODE_TYPE_DIRECTORY) {
-    printf("[%s/] (mod: %lld, children: %u, id_llm: %s)\n", // MODIFIED: Added
-                                                            // id_llm for debug
-           node->relative_path, (long long)node->last_modified_timestamp,
-           node->num_children,
+    printf("[%s/] (mod: %lld, children: %u, id_llm: %s)\n", node->relative_path,
+           (long long)node->last_modified_timestamp, node->num_children,
            node->generated_id_for_llm[0] == '\0' ? "(none)"
                                                  : node->generated_id_for_llm);
     for (uint32_t i = 0; i < node->num_children; ++i) {
       print_tree_recursive(node->children[i], indent_level + 1);
     }
   } else { // NODE_TYPE_FILE
-    printf(
-        "%s (mod: %lld, offset: %llu, size: %llu, id_llm: %s)\n", // MODIFIED:
-                                                                  // Added
-                                                                  // id_llm for
-                                                                  // debug
-        node->relative_path, (long long)node->last_modified_timestamp,
-        (unsigned long long)node->content_offset_in_data_section,
-        (unsigned long long)node->content_size,
-        node->generated_id_for_llm[0] == '\0' ? "(none)"
-                                              : node->generated_id_for_llm);
+    printf("%s (mod: %lld, offset: %llu, size: %llu, id_llm: %s)\n",
+           node->relative_path, (long long)node->last_modified_timestamp,
+           (unsigned long long)node->content_offset_in_data_section,
+           (unsigned long long)node->content_size,
+           node->generated_id_for_llm[0] == '\0' ? "(none)"
+                                                 : node->generated_id_for_llm);
   }
 }
