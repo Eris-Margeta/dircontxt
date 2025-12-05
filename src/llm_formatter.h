@@ -4,6 +4,7 @@
 #include "datatypes.h" // For DirContextTreeNode
 #include "diff.h"      // For DiffReport
 #include <stdbool.h>
+#include <stdio.h> // For FILE*
 
 // --- Core LLM Context File Generation Functions ---
 
@@ -26,6 +27,23 @@ bool generate_llm_context_file(const char *llm_txt_filepath,
                                const char *dctx_binary_filepath,
                                uint64_t data_section_start_offset_in_dctx_file,
                                const char *version_string);
+
+// --- NEW: Stream-Based Generation Function ---
+
+// Generates the LLM context content and writes it to an already open stream.
+// This is used for writing to either a file or an in-memory buffer for the
+// clipboard.
+//
+// Parameters are identical to generate_llm_context_file, except for the first:
+//   output_stream: An open, writable FILE stream.
+//
+// Returns:
+//   True if writing to the stream was successful, false otherwise.
+bool generate_llm_context_to_stream(
+    FILE *output_stream, DirContextTreeNode *root_node,
+    const char *dctx_binary_filepath,
+    uint64_t data_section_start_offset_in_dctx_file,
+    const char *version_string);
 
 // Generates a diff file that summarizes the changes between two versions.
 //

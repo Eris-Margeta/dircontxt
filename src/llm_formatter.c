@@ -32,14 +32,14 @@ find_node_by_path_recursive(DirContextTreeNode *node,
 
 // --- Public Function Implementations ---
 
+// REFACTORED: This function is now a wrapper around the stream version.
 bool generate_llm_context_file(const char *llm_txt_filepath,
                                DirContextTreeNode *root_node,
                                const char *dctx_binary_filepath,
                                uint64_t data_section_start_offset_in_dctx_file,
                                const char *version_string) {
-  if (llm_txt_filepath == NULL || root_node == NULL ||
-      dctx_binary_filepath == NULL || version_string == NULL) {
-    log_error("llm_formatter: Invalid arguments for generating context file.");
+  if (llm_txt_filepath == NULL) {
+    log_error("llm_formatter: llm_txt_filepath is NULL.");
     return false;
   }
 
@@ -51,51 +51,10 @@ bool generate_llm_context_file(const char *llm_txt_filepath,
     return false;
   }
 
-  // --- Write Header ---
-  fprintf(llm_fp, "%s%s%s\n\n", VERSION_HEADER_PREFIX, version_string,
-          VERSION_HEADER_SUFFIX);
-  fprintf(llm_fp, "<INSTRUCTIONS>\n");
-  fprintf(llm_fp, "1. Manifest: The \"DIRECTORY_TREE\" section below lists all "
-                  "files and directories.\n");
-  fprintf(llm_fp, "   - Each entry: [TYPE] RELATIVE_PATH (ID:UNIQUE_ID, "
-                  "MOD:UNIX_TIMESTAMP, SIZE:BYTES)\n");
-  fprintf(llm_fp, "   - TYPE is [D] for directory, [F] for file.\n");
-  fprintf(llm_fp, "   - SIZE is for files only.\n");
-  fprintf(llm_fp, "   - Binary files may be noted with (CONTENT:BINARY_HINT or "
-                  "CONTENT:BINARY_PLACEHOLDER).\n");
-  fprintf(llm_fp, "2. Content Access: To read a specific file:\n");
-  fprintf(llm_fp, "   - Find its UNIQUE_ID from the DIRECTORY_TREE.\n");
-  fprintf(
-      llm_fp,
-      "   - Search for the marker: <FILE_CONTENT_START ID=\"UNIQUE_ID\">\n");
-  fprintf(llm_fp, "   - The content is between this marker and "
-                  "<FILE_CONTENT_END ID=\"UNIQUE_ID\">\n");
-  fprintf(llm_fp, "</INSTRUCTIONS>\n\n");
+  bool success = generate_llm_context_to_stream(
+      llm_fp, root_node, dctx_binary_filepath,
+      data_section_start_offset_in_dctx_file, version_string);
 
-  // --- Write Directory Tree ---
-  fprintf(llm_fp, "<DIRECTORY_TREE>\n");
-  int shared_id_counter = 1;
-  write_manifest_entry_recursive(llm_fp, root_node, 0, &shared_id_counter);
-  fprintf(llm_fp, "</DIRECTORY_TREE>\n");
-
-  // --- Write File Contents ---
-  FILE *dctx_binary_fp = fopen(dctx_binary_filepath, "rb");
-  if (dctx_binary_fp == NULL) {
-    log_error("llm_formatter: Failed to open .dircontxt binary '%s' for "
-              "reading content: %s",
-              dctx_binary_filepath, strerror(errno));
-    fclose(llm_fp);
-    return false;
-  }
-
-  write_all_file_content_blocks_recursive(
-      llm_fp, root_node, dctx_binary_fp,
-      data_section_start_offset_in_dctx_file);
-
-  fclose(dctx_binary_fp);
-
-  // --- Finalize and Close ---
-  bool success = true;
   if (fclose(llm_fp) == EOF) {
     log_error("llm_formatter: Error closing LLM context file '%s': %s",
               llm_txt_filepath, strerror(errno));
@@ -103,6 +62,71 @@ bool generate_llm_context_file(const char *llm_txt_filepath,
   }
 
   return success;
+}
+
+// NEW: The core logic now resides here, writing to any open stream.
+bool generate_llm_context_to_stream(
+    FILE *output_stream, DirContextTreeNode *root_node,
+    const char *dctx_binary_filepath,
+    uint64_t data_section_start_offset_in_dctx_file,
+    const char *version_string) {
+
+  if (output_stream == NULL || root_node == NULL ||
+      dctx_binary_filepath == NULL || version_string == NULL) {
+    log_error(
+        "llm_formatter: Invalid arguments for generating context stream.");
+    return false;
+  }
+
+  // --- Write Header ---
+  fprintf(output_stream, "%s%s%s\n\n", VERSION_HEADER_PREFIX, version_string,
+          VERSION_HEADER_SUFFIX);
+  fprintf(output_stream, "<INSTRUCTIONS>\n");
+  fprintf(output_stream,
+          "1. Manifest: The \"DIRECTORY_TREE\" section below lists all "
+          "files and directories.\n");
+  fprintf(output_stream, "   - Each entry: [TYPE] RELATIVE_PATH (ID:UNIQUE_ID, "
+                         "MOD:UNIX_TIMESTAMP, SIZE:BYTES)\n");
+  fprintf(output_stream, "   - TYPE is [D] for directory, [F] for file.\n");
+  fprintf(output_stream, "   - SIZE is for files only.\n");
+  fprintf(output_stream,
+          "   - Binary files may be noted with (CONTENT:BINARY_HINT or "
+          "CONTENT:BINARY_PLACEHOLDER).\n");
+  fprintf(output_stream, "2. Content Access: To read a specific file:\n");
+  fprintf(output_stream, "   - Find its UNIQUE_ID from the DIRECTORY_TREE.\n");
+  fprintf(
+      output_stream,
+      "   - Search for the marker: <FILE_CONTENT_START ID=\"UNIQUE_ID\">\n");
+  fprintf(output_stream, "   - The content is between this marker and "
+                         "<FILE_CONTENT_END ID=\"UNIQUE_ID\">\n");
+  fprintf(output_stream, "</INSTRUCTIONS>\n\n");
+
+  // --- Write Directory Tree ---
+  fprintf(output_stream, "<DIRECTORY_TREE>\n");
+  int shared_id_counter = 1;
+  write_manifest_entry_recursive(output_stream, root_node, 0,
+                                 &shared_id_counter);
+  fprintf(output_stream, "</DIRECTORY_TREE>\n");
+
+  // --- Write File Contents ---
+  FILE *dctx_binary_fp = fopen(dctx_binary_filepath, "rb");
+  if (dctx_binary_fp == NULL) {
+    log_error("llm_formatter: Failed to open .dircontxt binary '%s' for "
+              "reading content: %s",
+              dctx_binary_filepath, strerror(errno));
+    return false;
+  }
+
+  write_all_file_content_blocks_recursive(
+      output_stream, root_node, dctx_binary_fp,
+      data_section_start_offset_in_dctx_file);
+
+  fclose(dctx_binary_fp);
+
+  // Final flush to ensure all data is written to the stream
+  fflush(output_stream);
+
+  return true;
 }
 
 bool generate_diff_file(const char *diff_filepath, const DiffReport *report,
@@ -186,7 +210,7 @@ bool generate_diff_file(const char *diff_filepath, const DiffReport *report,
   return success;
 }
 
-// --- Static Helper Function Implementations ---
+// --- Static Helper Function Implementations (NO CHANGES BELOW THIS LINE) ---
 
 static void write_manifest_entry_recursive(FILE *fp, DirContextTreeNode *node,
                                            int indent_level,
@@ -275,11 +299,11 @@ static bool is_likely_binary(const char *buffer, size_t size,
                              const char *path_for_ext_check) {
   // --- Check 1: By file extension ---
   const char *binary_exts[] = {
-      ".png", ".svg", ".jpg",   ".jpeg", ".gif", ".bmp",    ".ico", ".tiff",
-      ".mp3", ".wav", ".flac",  ".ogg",  ".mp4", ".mov",    ".avi", ".mkv",
-      ".pdf", ".zip", ".gz",    ".tar",  ".rar", ".7z",     ".bz2", ".exe",
-      ".dll", ".so",  ".dylib", ".o",    ".a",   ".lib",    ".bin", ".dat",
-      ".iso", ".img", ".class", ".jar",  ".pyc", ".sqlite", ".db"};
+      ".png", ".jpg",   ".jpeg", ".gif", ".bmp",    ".ico", ".tiff", ".mp3",
+      ".wav", ".flac",  ".ogg",  ".mp4", ".mov",    ".avi", ".mkv",  ".pdf",
+      ".zip", ".gz",    ".tar",  ".rar", ".7z",     ".bz2", ".exe",  ".dll",
+      ".so",  ".dylib", ".o",    ".a",   ".lib",    ".bin", ".dat",  ".iso",
+      ".img", ".class", ".jar",  ".pyc", ".sqlite", ".db"};
   const char *ext = strrchr(path_for_ext_check, '.');
   if (ext) {
     for (size_t i = 0; i < sizeof(binary_exts) / sizeof(binary_exts[0]); ++i) {

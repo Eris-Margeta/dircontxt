@@ -34,6 +34,7 @@ This format is significantly more effective than simple concatenation, enabling 
 
 -   **Structured Manifest**: Generates a clear directory tree with unique IDs for every file and folder, enabling efficient navigation by the LLM.
 -   **Token Efficiency**: Intelligently detects and excludes binary files, replacing their content with a simple placeholder to save valuable context window space.
+-   **Clipboard Integration**: Instantly copy a project's entire context to the clipboard for immediate use with an LLM, leaving no files behind.
 -   **Automatic Versioning & Diffing**: Automatically versions each snapshot and, upon detecting changes, generates a concise diff file that highlights additions, modifications, and removals.
 -   **Hierarchical Ignore System**: A powerful three-tiered ignore system (`.gitignore`-like syntax) provides precise control over which files are included in the snapshot.
 -   **Cross-Platform**: Written in C with a simple `Makefile` for easy compilation on POSIX-compliant systems like macOS and Linux.
@@ -55,9 +56,9 @@ Ensure you have the necessary build tools installed on your system.
     ```
 
 -   **For Debian / Ubuntu Linux:**
-    Install the `build-essential` package, which provides `git`, `gcc`, and `make`.
+    Install the `build-essential` package, which provides `git`, `gcc`, and `make`. For clipboard functionality, you will also need `xclip` (for X11) or `wl-copy` (for Wayland).
     ```bash
-    sudo apt-get update && sudo apt-get install build-essential git -y
+    sudo apt-get update && sudo apt-get install build-essential git xclip -y
     ```
 
 ### 2. Compile and Install
@@ -78,12 +79,12 @@ make release
 sudo cp build/bin/dircontxt /usr/local/bin/dctx
 
 # Verify the installation by checking the version
-dctx -v
+dctx --version
 ```
 
 ### 3. Add to Shell PATH (If Necessary)
 
-The `/usr/local/bin` directory is in the default `PATH` on most systems. If the `dctx -v` command fails, you may need to add this directory to your shell's configuration file.
+The `/usr/local/bin` directory is in the default `PATH` on most systems. If the `dctx --version` command fails, you may need to add this directory to your shell's configuration file.
 
 -   **For Zsh (`.zshrc`):**
     ```bash
@@ -109,7 +110,7 @@ The `/usr/local/bin` directory is in the default `PATH` on most systems. If the 
     ```
 
 2.  **Create the `config` File:**
-    This file controls the program's output behavior.
+    This file controls the program's output behavior when writing files.
     ```bash
     cat << EOF > ~/.config/dircontxt/config
     # ---------------------------------------------------
@@ -193,27 +194,34 @@ The `/usr/local/bin` directory is in the default `PATH` on most systems. If the 
 
 ## Usage Guide
 
-The command takes a single argument: the path to the directory you wish to snapshot.
+The command takes the path to the directory you wish to snapshot and an optional flag.
 
 ```bash
-dctx [directory_path]
+dctx <directory_path> [options]
 ```
-If `[directory_path]` is omitted, it defaults to the current directory (`.`).
 
-**Example 1: Snapshotting the current project**
+**Arguments & Options:**
+-   `directory_path`: The directory to snapshot. Defaults to the current directory (`.`) if omitted.
+-   `-c, --clipboard`: Copies the full context to the system clipboard instead of writing a `.llmcontext.txt` file. This mode is "traceless" and automatically deletes the temporary binary file after execution, leaving no artifacts on disk.
+-   `-h, --help`: Shows the help message.
+-   `-v, --version`: Shows the application version.
+
+**Example 1: Snapshotting to a file (default behavior)**
 ```bash
+# Snapshot the current project
 cd ~/DEV/my-project
 dctx .
 ```
 
-**Example 2: Snapshotting a project from another location**
+**Example 2: Copying a project's context directly to clipboard**
 ```bash
-dctx ~/Documents/another-project
+# Analyze a project from another location without creating any files
+dctx ~/Documents/another-project --clipboard
 ```
 
 ### Output Location and Permissions
 
-The output files (`.dircontxt`, `.llmcontext.txt`, and diffs) are always created in the **parent directory** of the target. This design prevents the output from being included in subsequent snapshots.
+When writing files, the output (`.dircontxt`, `.llmcontext.txt`, and diffs) is always created in the **parent directory** of the target. This design prevents the output from being included in subsequent snapshots.
 
 Therefore, you must have **write permissions** for the parent directory of your target folder.
 
@@ -226,7 +234,7 @@ Therefore, you must have **write permissions** for the parent directory of your 
 This file is the core of the versioning system.
 
 -   **Purpose**: A compact, machine-readable archive of the project's state. It serves as the "memory" of the last run, enabling comparison for diff generation.
--   **IMPORTANT**: **Do not delete this file between runs.** Deleting it will reset the versioning, and the next snapshot will start over at `V1` instead of creating an incremental version and a diff file.
+-   **IMPORTANT**: **Do not delete this file between runs.** Deleting it will reset the versioning, and the next snapshot will start over at `V1` instead of creating an incremental version and a diff file. (This file is automatically cleaned up when using `--clipboard` mode).
 
 ### 2. The LLM Snapshot (`.llmcontext.txt`)
 

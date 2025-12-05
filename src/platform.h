@@ -53,6 +53,14 @@ char *platform_get_dirname(const char *path);
 bool platform_join_paths(const char *base_path, const char *component,
                          char *result_path_buffer, size_t buffer_size);
 
+// --- NEW: Clipboard Functionality ---
+
+// Copies the given text content to the system clipboard.
+// This requires platform-specific command-line tools to be installed
+// (e.g., 'pbcopy' on macOS, 'xclip' or 'wl-copy' on Linux).
+// Returns true on success, false on failure.
+bool platform_copy_to_clipboard(const char *text);
+
 // Define the directory separator character for the current platform
 #ifdef _WIN32
 #define PLATFORM_DIR_SEPARATOR '\\'

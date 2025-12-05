@@ -1,11 +1,11 @@
 #include "platform.h"
 #include "datatypes.h" // For MAX_PATH_LEN
-#include "utils.h"     // For safe_strncpy
+#include "utils.h"     // For safe_strncpy and logging functions
 
 #include <errno.h>
 #include <libgen.h> // For basename
 #include <stdio.h>
-#include <stdlib.h> // For realpath, malloc, free
+#include <stdlib.h> // For realpath, malloc, free, getenv
 #include <string.h> // For strrchr, strlen, strcpy
 
 // --- Filesystem Operations ---
@@ -131,5 +131,48 @@ bool platform_join_paths(const char *base_path, const char *component,
   }
 
   strcat(result_path_buffer, component);
+  return true;
+}
+
+// --- NEW: Clipboard Implementation ---
+bool platform_copy_to_clipboard(const char *text) {
+  const char *command = NULL;
+#if defined(__APPLE__)
+  command = "pbcopy";
+#elif defined(__linux__) || defined(__unix__)
+  if (getenv("WAYLAND_DISPLAY")) {
+    command = "wl-copy";
+  } else if (getenv("DISPLAY")) {
+    command = "xclip -selection clipboard";
+  } else {
+    log_error("Clipboard error: Cannot detect WAYLAND or X11 display server.");
+    return false;
+  }
+#else
+  log_error("Clipboard functionality is not supported on this platform.");
+  return false;
+#endif
+
+  FILE *pipe = popen(command, "w");
+  if (pipe == NULL) {
+    log_error("Clipboard error: Failed to open pipe to '%s'. Is the required "
+              "utility (pbcopy, wl-copy, xclip) installed?",
+              command);
+    return false;
+  }
+
+  if (fputs(text, pipe) == EOF) {
+    log_error("Clipboard error: Failed to write data to the clipboard pipe.");
+    pclose(pipe);
+    return false;
+  }
+
+  if (pclose(pipe) != 0) {
+    log_error("Clipboard error: The clipboard command returned a non-zero exit "
+              "status.");
+    return false;
+  }
+
+  log_info("Content copied to clipboard.");
   return true;
 }
